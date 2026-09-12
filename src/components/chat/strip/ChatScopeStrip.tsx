@@ -17,7 +17,7 @@ import { Show, createSignal } from 'solid-js';
 import { chatStore, ONBOARDING_CONV_ID, isFixedAgentConv, type ConvMeta } from '~/state/chat';
 import { isConvWorking } from '~/state/live-selectors';
 import { resolveDisplayEngine } from '~/lib/member-shadow';
-import { engineSaveAt } from '~/lib/engine-save-stamps';
+import { engineSaveAt, engineSaveTick } from '~/lib/engine-save-stamps';
 import { activeClusterId } from '~/state/chat/store';
 import { teamStore } from '~/state/team';
 import { agentVisualInfo } from '~/lib/agent-types';
@@ -66,12 +66,20 @@ export default function ChatScopeStrip(props: Props) {
   // (retuned after the last engine save); legacy/pre-save pins read as
   // the roster value, matching what dispatch sends. Unbound convs keep
   // daemon-snap-first.
-  const engine = () => resolveDisplayEngine(
-    props.meta,
-    snap(),
-    teamStore.get(props.meta?.member),
-    props.meta?.member ? engineSaveAt(activeClusterId(), props.meta.member) : null,
-  );
+  // ATM14e — subscribe to the reactive save epoch: engineSaveAt is a
+  // plain localStorage read and never notifies Solid, so without this
+  // the header would wait for the next convMeta/team change instead of
+  // updating at the state level the moment the member is saved — in this
+  // tab AND in every other open tab (storage event).
+  const engine = () => {
+    engineSaveTick();
+    return resolveDisplayEngine(
+      props.meta,
+      snap(),
+      teamStore.get(props.meta?.member),
+      props.meta?.member ? engineSaveAt(activeClusterId(), props.meta.member) : null,
+    );
+  };
   const modelId = (): string => engine().model;
   const effortId = (): string => engine().effort;
   const clientId = (): string => engine().client;
@@ -164,6 +172,14 @@ export default function ChatScopeStrip(props: Props) {
             </Show>
           </Show>
           <span class="flex-1 text-sm font-semibold text-gray-100 truncate">{title()}</span>
+          <Show when={props.meta?.member}>
+            <span
+              class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono text-sky-200 bg-sky-500/10 border border-sky-500/30 flex-shrink-0"
+              title={`Client — from the roster member, updates live on save (${clientId()})`}
+            >
+              {clientId()}
+            </span>
+          </Show>
           <ModelEffortPickers
             conv={props.conv}
             model={modelId()}

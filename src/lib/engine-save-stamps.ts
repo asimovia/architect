@@ -15,7 +15,38 @@
  * importing the stores here would cycle).
  */
 
+import { createSignal } from 'solid-js';
+
 const KEY_PREFIX = 'mc-team-enginesave-v1::';
+
+/** ATM14e — reactive save epoch. `recordEngineSave` bumps it, so every
+ *  open chat header re-resolves its engine (model/effort/client) at the
+ *  state level the moment the member file is saved — same tab or, via
+ *  the `storage` event below, any other open tab. `engineSaveAt` alone
+ *  is a plain localStorage read and never notifies Solid. */
+const [saveTick, setSaveTick] = createSignal(0);
+
+/** Read in a reactive computation to re-run it on every engine save. */
+export function engineSaveTick(): number {
+  return saveTick();
+}
+
+let storageHooked = false;
+function hookStorage(): void {
+  if (storageHooked) return;
+  storageHooked = true;
+  try {
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('storage', (e) => {
+        if (typeof e.key === 'string' && e.key.startsWith(KEY_PREFIX)) setSaveTick((t) => t + 1);
+      });
+    }
+  } catch {
+    /* best-effort */
+  }
+}
+
+hookStorage();
 
 type StampMap = Record<string, number>;
 
@@ -60,5 +91,7 @@ export function recordEngineSave(
     localStorage.setItem(mapKey(clusterId), JSON.stringify(all));
   } catch {
     /* quota / private mode — stamps are best-effort */
+  } finally {
+    setSaveTick((t) => t + 1);
   }
 }
