@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { findShadowedConvs, isPinnedOverride, stalePins } from './member-shadow.ts';
+import { findShadowedConvs, isPinnedOverride, resolveDisplayEngine, stalePins } from './member-shadow.ts';
 
 test('auto/default/empty follow the member — not shadowed', () => {
   assert.equal(isPinnedOverride('auto', 'default'), false);
@@ -75,4 +75,48 @@ test('stalePins treats an empty file model as follow-the-default — any pin is 
   assert.deepEqual(stalePins(convMeta, {}, 'm', '', ''), [
     { conv: 'conv-pin', resetModel: true, resetEffort: false },
   ]);
+});
+
+test('resolveDisplayEngine shows the live member file for a follower, ignoring a stale daemon snap', () => {
+  assert.deepEqual(
+    resolveDisplayEngine(
+      { member: 'm', model: 'auto', effort: 'default' },
+      { model: 'opus', effort: 'high', client: 'claude-code' },
+      { model: 'muse-spark-x', effort: 'low', client: 'muse' },
+    ),
+    { model: 'muse-spark-x', effort: 'low', client: 'muse' },
+  );
+});
+
+test('resolveDisplayEngine keeps a deliberate header pin over the member file', () => {
+  assert.deepEqual(
+    resolveDisplayEngine(
+      { member: 'm', model: 'opus', effort: 'default' },
+      { model: 'opus', effort: 'high', client: 'claude-code' },
+      { model: 'muse-spark-x', effort: 'low', client: 'muse' },
+    ),
+    { model: 'opus', effort: 'low', client: 'muse' },
+  );
+});
+
+test('resolveDisplayEngine keeps daemon-snap-first for unbound convs', () => {
+  assert.deepEqual(
+    resolveDisplayEngine(
+      { model: 'auto', effort: 'default' },
+      { model: 'opus', effort: 'high', client: 'claude-code' },
+      undefined,
+    ),
+    { model: 'opus', effort: 'high', client: 'claude-code' },
+  );
+});
+
+test('resolveDisplayEngine falls back to snap when the bound member left the roster', () => {
+  assert.deepEqual(
+    resolveDisplayEngine(
+      { member: 'gone', model: 'auto', effort: 'default' },
+      { model: 'opus', effort: 'default', client: 'claude-code' },
+      undefined,
+    ),
+    { model: 'opus', effort: 'default', client: 'claude-code' },
+  );
 });

@@ -16,6 +16,7 @@
 import { Show, createSignal } from 'solid-js';
 import { chatStore, ONBOARDING_CONV_ID, isFixedAgentConv, type ConvMeta } from '~/state/chat';
 import { isConvWorking } from '~/state/live-selectors';
+import { resolveDisplayEngine } from '~/lib/member-shadow';
 import { teamStore } from '~/state/team';
 import { agentVisualInfo } from '~/lib/agent-types';
 import { debugDropCount } from '~/lib/debug-transport';
@@ -55,11 +56,17 @@ export default function ChatScopeStrip(props: Props) {
   };
 
   const snap = () => chatStore.state.convs[props.conv] ?? null;
-  // Daemon-authoritative first, local convMeta as the fallback — the same
-  // precedence the pickers themselves apply.
-  const modelId = (): string => snap()?.model ?? props.meta?.model ?? 'auto';
-  const effortId = (): string => snap()?.effort ?? props.meta?.effort ?? 'default';
-  const clientId = (): string => snap()?.client ?? props.meta?.client ?? 'claude-code';
+  // ATM14c — a conv bound to a roster member that FOLLOWS it (model
+  // 'auto' / effort 'default') shows the LIVE member file values, not the
+  // daemon snap (which still carries the pre-save sidecar). Saving the
+  // member therefore updates every open header in realtime via the
+  // team.updated WS hydrate — no click, no new turn. A deliberate
+  // header retune (a pin) keeps showing until the next member save
+  // releases it. Unbound convs keep daemon-snap-first.
+  const engine = () => resolveDisplayEngine(props.meta, snap(), teamStore.get(props.meta?.member));
+  const modelId = (): string => engine().model;
+  const effortId = (): string => engine().effort;
+  const clientId = (): string => engine().client;
 
   // ATM12 follow-up (2026-07-07 operator correction) — the fixed-agent
   // explainer sits under THIS agent's own name row, shown only while that

@@ -15,6 +15,21 @@ export interface ShadowConvMeta {
   effort?: string;
 }
 
+/** Live roster values for one member (subset of TeamMember frontmatter). */
+export interface ShadowMemberFile {
+  model?: string;
+  effort?: string;
+  client?: string;
+}
+
+/** Daemon-side snapshot values for one conv (subset of the conv snapshot —
+ *  its fields are `string | null`, hence the wider types). */
+export interface ShadowSnap {
+  model?: string | null;
+  effort?: string | null;
+  client?: string | null;
+}
+
 /** True when the conv carries its own engine override that beats the member
  *  file on every dispatch. 'auto' / 'default' / empty mean "follow the member". */
 export function isPinnedOverride(model?: string, effort?: string): boolean {
@@ -77,4 +92,44 @@ export function stalePins(
       };
     })
     .filter((s) => s.resetModel || s.resetEffort);
+}
+
+/** What an open chat header shows for its engine (ATM14c realtime sync).
+ *
+ *  A bound conv that FOLLOWS the member (model 'auto', effort 'default')
+ *  displays the LIVE roster values — so saving the member file updates
+ *  every open header within ~1s via the team.updated WS hydrate, with no
+ *  click and no new turn. A deliberate header retune (a pin) keeps
+ *  winning until the next member save releases it via {@link stalePins}.
+ *  client is never sent per-turn, so the member file always wins for it.
+ *  Unbound convs (or a bound member missing from the roster) keep the
+ *  previous daemon-snap-first behaviour. */
+export function resolveDisplayEngine(
+  meta: ShadowConvMeta | undefined,
+  snap: ShadowSnap | null | undefined,
+  member: ShadowMemberFile | undefined,
+): { model: string; effort: string; client: string } {
+  const metaModel = (meta?.model ?? '').trim();
+  const metaEffort = (meta?.effort ?? '').trim();
+  if (meta?.member && member) {
+    return {
+      model: metaModel !== '' && metaModel !== 'auto'
+        ? metaModel
+        : (member.model ?? '').trim() || 'auto',
+      effort: metaEffort !== '' && metaEffort !== 'default'
+        ? metaEffort
+        : (member.effort ?? '').trim() || 'default',
+      client: (member.client ?? '').trim()
+        || (snap?.client ?? '').trim()
+        || (meta as ShadowConvMeta & { client?: string })?.client
+        || 'claude-code',
+    };
+  }
+  return {
+    model: (snap?.model ?? '').trim() || metaModel || 'auto',
+    effort: (snap?.effort ?? '').trim() || metaEffort || 'default',
+    client: (snap?.client ?? '').trim()
+      || (meta as ShadowConvMeta & { client?: string })?.client
+      || 'claude-code',
+  };
 }

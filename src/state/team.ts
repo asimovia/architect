@@ -22,6 +22,8 @@
 import { createStore } from 'solid-js/store';
 import { log } from '~/lib/log';
 import { captureClusterEpoch, isCurrentEpoch } from '~/lib/swap-guard';
+import { stalePins } from '~/lib/member-shadow';
+import { chatStore } from '~/state/chat';
 import type {
   DaemonClient,
   DaemonEvent,
@@ -249,7 +251,30 @@ function onTeamEvent(client: DaemonClient, ev: DaemonEvent): void {
       setState('list', (prev) => prev.filter((m) => m.id !== id));
       setState('details', id, undefined as unknown as TeamMemberDetail);
     }
-    void hydrate(client);
+    // ATM14c — realtime sync for open convs in EVERY tab, not just the
+    // one that saved: after the roster re-hydrates, release bound pins
+    // that differ from the fresh member file so the next dispatch (and
+    // the header, via resolveDisplayEngine) follows the template.
+    // Pins already equal to the file are left alone.
+    if (t === 'team.updated' && id) {
+      void (async () => {
+        await hydrate(client);
+        const fresh = get(id);
+        if (!fresh) return;
+        for (const s of stalePins(
+          chatStore.state.convMeta,
+          chatStore.state.archivedConvs,
+          id,
+          fresh.model ?? '',
+          fresh.effort ?? '',
+        )) {
+          if (s.resetModel) chatStore.setConvModel(s.conv, 'auto');
+          if (s.resetEffort) chatStore.setConvEffort(s.conv, 'default');
+        }
+      })();
+    } else {
+      void hydrate(client);
+    }
     // Drop any stale cached body for an updated member so the editor
     // re-fetches the fresh prompt next time it opens.
     if (t === 'team.updated' && id && state.details[id]) {
