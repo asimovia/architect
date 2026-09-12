@@ -177,3 +177,19 @@ export function resolveDisplayEngine(
       || 'claude-code',
   };
 }
+
+/** ATM14f — a `<select value={live}>` whose `live` id matches NO option
+ *  renders the wrong row (first option / blank), so the header combo
+ *  would show a lie while the state underneath is already correct
+ *  (catalog not yet hydrated, unknown client id, brand-new model id).
+ *  Append the live value as its own trailing option so the combo ALWAYS
+ *  displays the true engine value; a no-op when already listed. */
+export function withLiveOption(
+  options: { id: string; label: string }[],
+  live: string | null | undefined,
+): { id: string; label: string }[] {
+  const v = (live ?? '').trim();
+  if (!v) return options;
+  if (options.some((o) => o.id === v)) return options;
+  return [...options, { id: v, label: `${v} (member)` }];
+}

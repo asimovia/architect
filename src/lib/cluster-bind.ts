@@ -253,12 +253,20 @@ export function installWakeHandler(debounceMs = 1000): () => void {
     if (document.visibilityState === 'visible') schedule();
   };
 
+  // ATM14f — a tab that stays VISIBLE while its socket misses the
+  // `team.updated` event (laptop half-asleep, dropped frame) would keep
+  // a stale roster forever: visibilitychange never fires for it, so the
+  // header combos would trail the member file until the next save. A
+  // focus return revalidates through the same debounced + 15s-floored
+  // path, so every open tab converges on the member file on its own.
   document.addEventListener('visibilitychange', onVisibility);
   window.addEventListener('online', schedule);
+  window.addEventListener('focus', schedule);
 
   return () => {
     if (timer !== null) clearTimeout(timer);
     document.removeEventListener('visibilitychange', onVisibility);
     window.removeEventListener('online', schedule);
+    window.removeEventListener('focus', schedule);
   };
 }

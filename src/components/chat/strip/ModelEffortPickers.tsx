@@ -16,6 +16,7 @@
 import { For, Show } from 'solid-js';
 import { chatStore } from '~/state/chat';
 import { clientsStore } from '~/state/clients';
+import { withLiveOption } from '~/lib/member-shadow';
 import { MODEL_CATALOG, EFFORT_CATALOG } from '~/lib/models';
 
 const SELECT_MODEL =
@@ -33,6 +34,17 @@ export default function ModelEffortPickers(props: {
 }) {
   const isClaudeCode = (): boolean => props.client === 'claude-code';
   const catalog = () => clientsStore.catalogFor(props.client);
+  // ATM14f — the combos always offer the LIVE value, even when the
+  // catalog hasn't caught up (not yet hydrated, unknown client, new
+  // model id): without a matching <option> the select would render the
+  // wrong row while the state underneath is already correct.
+  const liveModels = () => withLiveOption(catalog().models, props.model);
+  const liveEfforts = () =>
+    withLiveOption(
+      (isClaudeCode() ? EFFORT_CATALOG : catalog().efforts).map((e) => ({ id: e.id, label: e.label })),
+      props.effort,
+    );
+  const claudeModelKnown = (): boolean => MODEL_CATALOG.some((m) => m.id === props.model);
   return (
     <div class="flex items-center gap-1 flex-shrink-0">
       <Show
@@ -44,7 +56,7 @@ export default function ModelEffortPickers(props: {
             title={`Model — applies from the next turn (${props.client})`}
             class={SELECT_MODEL}
           >
-            <For each={catalog().models}>{(m) => <option value={m.id}>{m.label}</option>}</For>
+            <For each={liveModels()}>{(m) => <option value={m.id}>{m.label}</option>}</For>
           </select>
         }
       >
@@ -61,6 +73,9 @@ export default function ModelEffortPickers(props: {
               </For>
             </optgroup>
           )}</For>
+          <Show when={!claudeModelKnown()}>
+            <option value={props.model}>{`${props.model} (member)`}</option>
+          </Show>
         </select>
       </Show>
       <select
@@ -69,7 +84,7 @@ export default function ModelEffortPickers(props: {
         title="Effort (reasoning depth) — applies from the next turn"
         class={SELECT_EFFORT}
       >
-        <For each={isClaudeCode() ? EFFORT_CATALOG : catalog().efforts}>
+        <For each={liveEfforts()}>
           {(e) => <option value={e.id}>{e.label}</option>}
         </For>
       </select>

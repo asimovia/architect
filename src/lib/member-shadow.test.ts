@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { effortPinLive, findShadowedConvs, isPinnedOverride, modelPinLive, pinIsLive, resolveDisplayEngine, stalePins } from './member-shadow.ts';
+import { effortPinLive, findShadowedConvs, isPinnedOverride, modelPinLive, pinIsLive, resolveDisplayEngine, stalePins, withLiveOption } from './member-shadow.ts';
 
 test('auto/default/empty follow the member — not shadowed', () => {
   assert.equal(isPinnedOverride('auto', 'default'), false);
@@ -162,4 +162,19 @@ test('resolveDisplayEngine falls back to snap when the bound member left the ros
     ),
     { model: 'opus', effort: 'default', client: 'claude-code' },
   );
+});
+
+test('withLiveOption is a no-op when the live value is listed or empty', () => {
+  const opts = [{ id: 'a', label: 'A' }];
+  assert.deepEqual(withLiveOption(opts, 'a'), opts);
+  assert.deepEqual(withLiveOption(opts, ''), opts);
+  assert.deepEqual(withLiveOption(opts, null), opts);
+  assert.deepEqual(withLiveOption(opts, undefined), opts);
+});
+
+test('withLiveOption appends an unknown live value so the combo shows truth', () => {
+  assert.deepEqual(withLiveOption([{ id: 'a', label: 'A' }], 'muse-spark-1.3-contributor'), [
+    { id: 'a', label: 'A' },
+    { id: 'muse-spark-1.3-contributor', label: 'muse-spark-1.3-contributor (member)' },
+  ]);
 });
