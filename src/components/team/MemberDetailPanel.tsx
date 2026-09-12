@@ -16,7 +16,7 @@ import { Show, createEffect, createMemo, createResource, createSignal } from 'so
 import { daemonStore } from '~/state/daemon';
 import { teamStore } from '~/state/team';
 import { chatStore } from '~/state/chat';
-import { findShadowedConvs } from '~/lib/member-shadow';
+import { stalePins } from '~/lib/member-shadow';
 import { DEFAULT_PROVIDER } from '~/lib/models';
 import type { EngineChoice } from '~/components/team/ClientModelEffortPicker';
 import { ModelSection } from '~/components/team/detail/ModelSection';
@@ -52,30 +52,6 @@ export default function MemberDetailPanel(props: { memberId: string; onClose: ()
 
   const [savingSection, setSavingSection] = createSignal<string | null>(null);
   const [error, setError] = createSignal<string | null>(null);
-  // ATM14 — the memberId this dismissal belongs to (stale content is
-  // cheapest to key, not to clear, when the panel swaps members).
-  const [shadowDismissed, setShadowDismissed] = createSignal<string | null>(null);
-
-  // ATM14 — bound convs whose pinned model/effort beat this member's
-  // engine settings on every dispatch ("overrides win on any turn"), so
-  // editing client/model/effort here changes nothing for them until the
-  // pins are cleared. client/provider need no reset: the cockpit never
-  // sends them, so the member file already wins on the next idle turn.
-  const shadowed = createMemo(() =>
-    findShadowedConvs(chatStore.state.convMeta, chatStore.state.archivedConvs, props.memberId),
-  );
-  const shadowLive = createMemo(() =>
-    shadowed().some((c) => chatStore.state.convs[c]?.live === true),
-  );
-  const showShadow = createMemo(() => shadowed().length > 0 && shadowDismissed() !== props.memberId);
-
-  const followMember = () => {
-    for (const c of shadowed()) {
-      chatStore.setConvModel(c, 'auto');
-      chatStore.setConvEffort(c, 'default');
-    }
-    setShadowDismissed(props.memberId);
-  };
 
   // Capture the on-disk `updated:` at mount; warn if it moves (another
   // cockpit tab edited the same member) — ATM6 concurrent-edit warning.
@@ -114,7 +90,30 @@ export default function MemberDetailPanel(props: { memberId: string; onClose: ()
     setError(null);
     const res = await teamStore.update(c, props.memberId, body);
     setSavingSection(null);
-    if (!res.ok) setError(`Save failed (HTTP ${res.status}) — reverted.`);
+    if (!res.ok) {
+      setError(`Save failed (HTTP ${res.status}) — reverted.`);
+      return;
+    }
+    // ATM14b — the member file is the source of truth: on every engine
+    // save, bound convs whose model/effort pins differ from the saved
+    // values silently go back to follow-the-member, so the next dispatch
+    // already carries the new config. No banner, no click. Pins already
+    // equal to the file are left alone. client/provider need nothing:
+    // the cockpit never sends them, so the file always wins for those.
+    if (section === 'model') {
+      const fileModel = (res.member.model ?? '').trim();
+      const fileEffort = (res.member.effort ?? '').trim();
+      for (const s of stalePins(
+        chatStore.state.convMeta,
+        chatStore.state.archivedConvs,
+        props.memberId,
+        fileModel,
+        fileEffort,
+      )) {
+        if (s.resetModel) chatStore.setConvModel(s.conv, 'auto');
+        if (s.resetEffort) chatStore.setConvEffort(s.conv, 'default');
+      }
+    }
   };
 
   const del = async (): Promise<void> => {
@@ -165,35 +164,6 @@ export default function MemberDetailPanel(props: { memberId: string; onClose: ()
           <Show when={error()}>
             <div class="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-[12px] text-red-200">{error()}</div>
           </Show>
-          <Show when={showShadow()}>
-            <div class="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-200 space-y-1.5">
-              <p>
-                {shadowed().length === 1 ? '1 chat' : `${shadowed().length} chats`} bound to this member
-                pin{shadowed().length === 1 ? 's' : ''} its own model/effort
-                ({shadowed().map((c) => chatStore.state.convMeta[c]?.title || c).slice(0, 2).join(', ')}
-                {shadowed().length > 2 ? ', …' : ''}), so it ignores this member's engine settings.
-              </p>
-              <p>
-                {shadowLive()
-                  ? 'A turn is running now — it finishes with the old config. '
-                  : ''}
-                Follow the member from the next turn?
-              </p>
-              <div class="flex gap-2">
-                <button
-                  type="button"
-                  onClick={followMember}
-                  class="text-[12px] font-mono text-amber-100 bg-amber-500/20 border border-amber-500/40 hover:bg-amber-500/30 rounded px-2.5 py-1"
-                >Follow member</button>
-                <button
-                  type="button"
-                  onClick={() => setShadowDismissed(props.memberId)}
-                  class="text-[12px] font-mono text-amber-200/70 hover:text-amber-100 px-2 py-1"
-                >Keep pins</button>
-              </div>
-            </div>
-          </Show>
-
           <ModelSection
             value={engine()}
             onChange={setEngine}

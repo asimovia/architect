@@ -41,3 +41,40 @@ export function findShadowedConvs(
     .map(([conv]) => conv)
     .sort();
 }
+
+/** One bound conv whose pin no longer matches the saved member file. */
+export interface StalePin {
+  conv: string;
+  resetModel: boolean;
+  resetEffort: boolean;
+}
+
+/** Subset of {@link findShadowedConvs} whose pin actually DIFFERS from the
+ *  just-saved `fileModel` / `fileEffort`. Pins already equal to the file
+ *  are harmless duplicates of it and are left alone, so a deliberate
+ *  chat-header retune that happens to match the file survives a save.
+ *  Model compares exact (ids are case-sensitive); effort compares
+ *  lowercased (the daemon normalises it); an empty file value means
+ *  follow-the-default, so any concrete pin is stale. Sorted by conv. */
+export function stalePins(
+  convMeta: Record<string, ShadowConvMeta>,
+  archivedConvs: Record<string, true>,
+  memberId: string,
+  fileModel: string = '',
+  fileEffort: string = '',
+): StalePin[] {
+  const fileM = (fileModel ?? '').trim();
+  const fileE = ((fileEffort ?? '').trim().toLowerCase()) || 'default';
+  return findShadowedConvs(convMeta, archivedConvs, memberId)
+    .map((conv) => {
+      const meta = convMeta[conv] ?? {};
+      const pinM = (meta.model ?? '').trim();
+      const pinE = (meta.effort ?? '').trim().toLowerCase();
+      return {
+        conv,
+        resetModel: pinM !== '' && pinM !== 'auto' && pinM !== fileM,
+        resetEffort: pinE !== '' && pinE !== 'default' && pinE !== fileE,
+      };
+    })
+    .filter((s) => s.resetModel || s.resetEffort);
+}
