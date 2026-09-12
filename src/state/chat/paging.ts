@@ -12,8 +12,8 @@
 
 import type { DaemonClient, DaemonEvent } from '~/lib/daemon-client';
 import { log } from '~/lib/log';
-import { cleanChatText } from '~/lib/chat-sanitize';
 import { state, setState } from './store';
+import { historyMsg } from './history-msg';
 import { PAGE, UI_MESSAGE_CAP, type ChatMsg } from './types';
 
 function listLen(conv: string): number {
@@ -54,37 +54,6 @@ export function setInitialPaging(conv: string, hasMore: boolean, fallbackOldestT
     loading: false,
     capped: list.length >= UI_MESSAGE_CAP,
   });
-}
-
-function historyMsg(ev: DaemonEvent): ChatMsg | null {
-  const t = typeof ev.type === 'string' ? ev.type : '';
-  if (t === 'chat.user') {
-    return {
-      kind: 'user',
-      text: String(ev.text ?? ''),
-      author: String(ev.author ?? 'operator'),
-      ts: String(ev.ts ?? ''),
-    };
-  }
-  if (t === 'chat.assistant' || t === 'chat.assistant.final') {
-    return {
-      kind: 'assistant',
-      text: cleanChatText(String(ev.text ?? '')),
-      streaming: false,
-      ts: String(ev.ts ?? ''),
-      stream_id: typeof ev.stream_id === 'string' ? ev.stream_id : undefined,
-    };
-  }
-  if (t === 'chat.cancelled') {
-    return {
-      kind: 'assistant',
-      text: String(ev.text ?? ''),
-      streaming: false,
-      cancelled: true,
-      ts: String(ev.ts ?? ''),
-    };
-  }
-  return null;
 }
 
 /**

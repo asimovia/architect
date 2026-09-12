@@ -24,9 +24,11 @@
  * here. The utility ships first so M8.2 has a target to point to.
  */
 
-import { detectQuotaError, resetCountdown } from '../components/chat/bubbles/quota-error';
+import { detectQuotaError, resetCountdown } from '../components/chat/bubbles/quota-error.ts';
 
-const DEV = import.meta.env.DEV;
+// AX22 — guarded (cockpit-version.ts pattern) so leaf modules stay
+// importable under `npm test` (node's native TS stripping, no vite env).
+const DEV = (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV ?? false;
 
 function verboseOverride(): boolean {
   try {

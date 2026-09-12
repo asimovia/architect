@@ -11,7 +11,7 @@
  * must never see them.
  */
 
-import { log } from '~/lib/log';
+import { log } from './log.ts';
 
 /** Chat attachment served by the daemon. The `url` is daemon-relative
  *  (e.g. `/chat/uploads/2026-06-10/abc.png`); resolve against the
