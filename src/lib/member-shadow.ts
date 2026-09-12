@@ -13,6 +13,10 @@ export interface ShadowConvMeta {
   member?: string;
   model?: string;
   effort?: string;
+  /** ATM14d — epoch ms of the last deliberate header retune per dial.
+   *  Absent = legacy pin (set before stamps existed). */
+  modelPinAt?: number;
+  effortPinAt?: number;
 }
 
 /** Live roster values for one member (subset of TeamMember frontmatter). */
@@ -94,29 +98,69 @@ export function stalePins(
     .filter((s) => s.resetModel || s.resetEffort);
 }
 
-/** What an open chat header shows for its engine (ATM14c realtime sync).
+/** ATM14d — a header pin applies only when it is NEWER than the member's
+ *  last engine save. Legacy pins (no stamp) always lose to the file;
+ *  a pin retuned after the save wins until the next save. `saveAt` is
+ *  null when this browser never saved the member — then any stamped pin
+ *  (retuned this session) is live, any legacy pin is stale. */
+export function pinIsLive(
+  pinAt: number | undefined | null,
+  saveAt: number | undefined | null,
+): boolean {
+  if (typeof pinAt !== 'number' || !Number.isFinite(pinAt) || pinAt <= 0) return false;
+  if (saveAt === undefined || saveAt === null) return true;
+  return pinAt >= saveAt;
+}
+
+/** Live-pin check per dial for a bound conv's meta (unbound convs keep
+ *  their pins — there is no member file to follow). */
+export function modelPinLive(
+  meta: ShadowConvMeta | undefined,
+  saveAt: number | undefined | null,
+): boolean {
+  const m = (meta?.model ?? '').trim();
+  if (m === '' || m === 'auto') return false;
+  return pinIsLive(meta?.modelPinAt, saveAt);
+}
+
+export function effortPinLive(
+  meta: ShadowConvMeta | undefined,
+  saveAt: number | undefined | null,
+): boolean {
+  const e = (meta?.effort ?? '').trim();
+  if (e === '' || e === 'default') return false;
+  return pinIsLive(meta?.effortPinAt, saveAt);
+}
+
+/** What an open chat header shows for its engine (ATM14c realtime sync,
+ *  ATM14d pin-stamp rule).
  *
  *  A bound conv that FOLLOWS the member (model 'auto', effort 'default')
  *  displays the LIVE roster values — so saving the member file updates
  *  every open header within ~1s via the team.updated WS hydrate, with no
- *  click and no new turn. A deliberate header retune (a pin) keeps
- *  winning until the next member save releases it via {@link stalePins}.
- *  client is never sent per-turn, so the member file always wins for it.
- *  Unbound convs (or a bound member missing from the roster) keep the
- *  previous daemon-snap-first behaviour. */
+ *  click and no new turn. A header retune (a pin) displays only while it
+ *  is live per {@link pinIsLive} — retuned after the member's last engine
+ *  save; legacy pins and pre-save pins read as the roster value, matching
+ *  what the next dispatch actually sends. client is never sent per-turn,
+ *  so the member file always wins for it. Unbound convs (or a bound
+ *  member missing from the roster) keep the daemon-snap-first behaviour. */
 export function resolveDisplayEngine(
   meta: ShadowConvMeta | undefined,
   snap: ShadowSnap | null | undefined,
   member: ShadowMemberFile | undefined,
+  saveAt?: number | null,
 ): { model: string; effort: string; client: string } {
   const metaModel = (meta?.model ?? '').trim();
   const metaEffort = (meta?.effort ?? '').trim();
   if (meta?.member && member) {
+    // ATM14d — a stale pin (legacy, or set before the last member save)
+    // reads as the live roster value, so the header matches the engine
+    // the next dispatch will actually use. Only a live pin displays.
     return {
-      model: metaModel !== '' && metaModel !== 'auto'
+      model: modelPinLive(meta, saveAt)
         ? metaModel
         : (member.model ?? '').trim() || 'auto',
-      effort: metaEffort !== '' && metaEffort !== 'default'
+      effort: effortPinLive(meta, saveAt)
         ? metaEffort
         : (member.effort ?? '').trim() || 'default',
       client: (member.client ?? '').trim()

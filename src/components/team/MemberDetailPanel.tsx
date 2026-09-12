@@ -16,7 +16,9 @@ import { Show, createEffect, createMemo, createResource, createSignal } from 'so
 import { daemonStore } from '~/state/daemon';
 import { teamStore } from '~/state/team';
 import { chatStore } from '~/state/chat';
+import { activeClusterId } from '~/state/chat/store';
 import { stalePins } from '~/lib/member-shadow';
+import { recordEngineSave } from '~/lib/engine-save-stamps';
 import { DEFAULT_PROVIDER } from '~/lib/models';
 import type { EngineChoice } from '~/components/team/ClientModelEffortPicker';
 import { ModelSection } from '~/components/team/detail/ModelSection';
@@ -101,6 +103,10 @@ export default function MemberDetailPanel(props: { memberId: string; onClose: ()
     // equal to the file are left alone. client/provider need nothing:
     // the cockpit never sends them, so the file always wins for those.
     if (section === 'model') {
+      // ATM14d — stamp this engine save: header pins set BEFORE this
+      // moment go stale (the file wins at the next dispatch), pins the
+      // operator retunes AFTER it stay live until the following save.
+      recordEngineSave(activeClusterId(), props.memberId);
       const fileModel = (res.member.model ?? '').trim();
       const fileEffort = (res.member.effort ?? '').trim();
       for (const s of stalePins(

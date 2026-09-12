@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { findShadowedConvs, isPinnedOverride, resolveDisplayEngine, stalePins } from './member-shadow.ts';
+import { effortPinLive, findShadowedConvs, isPinnedOverride, modelPinLive, pinIsLive, resolveDisplayEngine, stalePins } from './member-shadow.ts';
 
 test('auto/default/empty follow the member — not shadowed', () => {
   assert.equal(isPinnedOverride('auto', 'default'), false);
@@ -88,15 +88,58 @@ test('resolveDisplayEngine shows the live member file for a follower, ignoring a
   );
 });
 
-test('resolveDisplayEngine keeps a deliberate header pin over the member file', () => {
+test('resolveDisplayEngine shows a legacy (unstamped) pin as the member file', () => {
   assert.deepEqual(
     resolveDisplayEngine(
       { member: 'm', model: 'opus', effort: 'default' },
       { model: 'opus', effort: 'high', client: 'claude-code' },
       { model: 'muse-spark-x', effort: 'low', client: 'muse' },
+      null,
+    ),
+    { model: 'muse-spark-x', effort: 'low', client: 'muse' },
+  );
+});
+
+test('resolveDisplayEngine keeps a pin retuned after the member save', () => {
+  assert.deepEqual(
+    resolveDisplayEngine(
+      { member: 'm', model: 'opus', effort: 'default', modelPinAt: 2000 },
+      { model: 'opus', effort: 'high', client: 'claude-code' },
+      { model: 'muse-spark-x', effort: 'low', client: 'muse' },
+      1000,
     ),
     { model: 'opus', effort: 'low', client: 'muse' },
   );
+});
+
+test('resolveDisplayEngine drops a pin set before the member save', () => {
+  assert.deepEqual(
+    resolveDisplayEngine(
+      { member: 'm', model: 'opus', effort: 'high', modelPinAt: 1000, effortPinAt: 1000 },
+      { model: 'opus', effort: 'high', client: 'claude-code' },
+      { model: 'muse-spark-x', effort: 'low', client: 'muse' },
+      2000,
+    ),
+    { model: 'muse-spark-x', effort: 'low', client: 'muse' },
+  );
+});
+
+test('pinIsLive: stamped pin with no save observed is live; legacy pin is stale', () => {
+  assert.equal(pinIsLive(2000, null), true);
+  assert.equal(pinIsLive(undefined, null), false);
+  assert.equal(pinIsLive(undefined, 1000), false);
+  assert.equal(pinIsLive(1000, 2000), false);
+  assert.equal(pinIsLive(2000, 2000), true);
+  assert.equal(pinIsLive(3000, 2000), true);
+});
+
+test('modelPinLive/effortPinLive ignore follow-values and unbound convs', () => {
+  assert.equal(modelPinLive({ model: 'auto', modelPinAt: 9999 }, null), false);
+  assert.equal(effortPinLive({ effort: 'default', effortPinAt: 9999 }, null), false);
+  assert.equal(modelPinLive({ member: 'm', model: 'opus', modelPinAt: 3000 }, 2000), true);
+  assert.equal(modelPinLive({ member: 'm', model: 'opus' }, null), false);
+  assert.equal(effortPinLive({ member: 'm', effort: 'high', effortPinAt: 1000 }, 2000), false);
+  assert.equal(effortPinLive({ member: 'm', effort: 'high', effortPinAt: 3000 }, 2000), true);
 });
 
 test('resolveDisplayEngine keeps daemon-snap-first for unbound convs', () => {

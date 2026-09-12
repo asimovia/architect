@@ -17,6 +17,8 @@ import { Show, createSignal } from 'solid-js';
 import { chatStore, ONBOARDING_CONV_ID, isFixedAgentConv, type ConvMeta } from '~/state/chat';
 import { isConvWorking } from '~/state/live-selectors';
 import { resolveDisplayEngine } from '~/lib/member-shadow';
+import { engineSaveAt } from '~/lib/engine-save-stamps';
+import { activeClusterId } from '~/state/chat/store';
 import { teamStore } from '~/state/team';
 import { agentVisualInfo } from '~/lib/agent-types';
 import { debugDropCount } from '~/lib/debug-transport';
@@ -56,14 +58,20 @@ export default function ChatScopeStrip(props: Props) {
   };
 
   const snap = () => chatStore.state.convs[props.conv] ?? null;
-  // ATM14c — a conv bound to a roster member that FOLLOWS it (model
-  // 'auto' / effort 'default') shows the LIVE member file values, not the
-  // daemon snap (which still carries the pre-save sidecar). Saving the
-  // member therefore updates every open header in realtime via the
-  // team.updated WS hydrate — no click, no new turn. A deliberate
-  // header retune (a pin) keeps showing until the next member save
-  // releases it. Unbound convs keep daemon-snap-first.
-  const engine = () => resolveDisplayEngine(props.meta, snap(), teamStore.get(props.meta?.member));
+  // ATM14c/d — a conv bound to a roster member shows the LIVE member
+  // file values, not the daemon snap (which still carries the pre-save
+  // sidecar). Saving the member therefore updates every open header in
+  // realtime via the team.updated WS hydrate — no click, no new turn.
+  // A header retune (a pin) shows only while live per pinIsLive
+  // (retuned after the last engine save); legacy/pre-save pins read as
+  // the roster value, matching what dispatch sends. Unbound convs keep
+  // daemon-snap-first.
+  const engine = () => resolveDisplayEngine(
+    props.meta,
+    snap(),
+    teamStore.get(props.meta?.member),
+    props.meta?.member ? engineSaveAt(activeClusterId(), props.meta.member) : null,
+  );
   const modelId = (): string => engine().model;
   const effortId = (): string => engine().effort;
   const clientId = (): string => engine().client;

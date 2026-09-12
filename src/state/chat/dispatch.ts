@@ -13,6 +13,9 @@ import type { DaemonClient, DispatchBody } from '~/lib/daemon-client';
 import { log } from '~/lib/log';
 import { state, setState, activeClusterId, clearPendingReply } from './store';
 import { agentTypeFromSlug, type ChatMsg, type DispatchOpts, type DispatchOutcome } from './types';
+import { effortPinLive, modelPinLive } from '~/lib/member-shadow';
+import { engineSaveAt } from '~/lib/engine-save-stamps';
+import { saveConvMeta } from './persistence';
 
 /** What was actually on the wire, for the console breadcrumb and the
  *  in-thread error bubble. Image payloads are never echoed. */
@@ -44,8 +47,32 @@ function buildBody(opts: Required<Pick<DispatchOpts, 'conv' | 'text'>> & Dispatc
   if (meta?.member) body.member = meta.member;
   // MP2/MP3 — 'auto' / 'default' are omitted so older daemons that don't
   // understand the fields aren't confused, and the CLI keeps its default.
-  if (meta?.model && meta.model !== 'auto') body.model = meta.model;
-  if (meta?.effort && meta.effort !== 'default') body.effort = meta.effort;
+  // ATM14d — a bound conv's pin is sent ONLY while it is live (retuned
+  // after the member's last engine save). A stale pin — legacy unstamped,
+  // or set before the save — is omitted AND healed back to follow, so the
+  // member file wins on this very turn: save the ficha, next request uses
+  // it. Unbound convs keep their pins (no member file to follow).
+  const saveAt = meta?.member ? engineSaveAt(activeClusterId(), meta.member) : null;
+  let healed = false;
+  if (meta?.model && meta.model !== 'auto') {
+    if (!meta.member || modelPinLive(meta, saveAt)) {
+      body.model = meta.model;
+    } else {
+      setState('convMeta', conv, 'model', 'auto');
+      setState('convMeta', conv, 'modelPinAt', undefined);
+      healed = true;
+    }
+  }
+  if (meta?.effort && meta.effort !== 'default') {
+    if (!meta.member || effortPinLive(meta, saveAt)) {
+      body.effort = meta.effort;
+    } else {
+      setState('convMeta', conv, 'effort', 'default');
+      setState('convMeta', conv, 'effortPinAt', undefined);
+      healed = true;
+    }
+  }
+  if (healed) saveConvMeta();
   if (scope.module) body.module_id = scope.module;
   if (scope.taskId) body.task_id = scope.taskId;
   if (scope.initiative) body.initiative_id = scope.initiative;
