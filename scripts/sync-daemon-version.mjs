@@ -74,7 +74,68 @@ try {
 
 const m = daemonSrc.match(/^DAEMON_VERSION\s*=\s*"([^"]+)"/m);
 if (!m) fail(`DAEMON_VERSION marker not found in ${daemonPath}`);
-const daemonVersion = m[1];
+let daemonVersion = m[1];
+
+// ── PUBLISH-SURFACE GATE (2026-09-13, operator field report) ──────────────
+//
+// The loop this prevents, seen on MeshKore Server 2026-09-13:
+//
+//   daemon/constants.py    py-1.35.10   (source — bumped by the AX23 agent)
+//   public/reference/…     py-1.35.9    (CDN bundle — bundle.py never re-run)
+//   cockpit EXPECTED       py-1.35.10   (this script, synced from the source)
+//
+// Every cluster then sat on the "Updating MeshKore Core…" screen forever:
+// the cockpit demanded 1.35.10, the CDN handed back 1.35.9 on every retry,
+// and the daemon — correctly — refused to "update" to a version that isn't
+// newer than the one it already runs. Nothing was broken; the three numbers
+// were just published out of order.
+//
+// The asymmetry that makes this easy to hit: the EXPECTED sync below is
+// AUTOMATIC (prebuild), while publishing the bundle is three MANUAL steps
+// (`python3 bundle.py`, copy to public/reference/…, commit + deploy — see
+// daemon/README.md). So a cockpit deploy that forgets the manual half ships
+// an expectation the CDN cannot satisfy. Hence: a cockpit build must never
+// expect a daemon the publish surface doesn't serve.
+const publishedDaemonPath = join(
+  __dirname, '..', 'public', 'reference', 'cluster', 'scripts', 'daemon.py',
+);
+if (!existsSync(publishedDaemonPath)) {
+  fail(`publish surface missing: ${publishedDaemonPath}`);
+}
+// Only the leading marker is needed — it sits in the first 8 KB precisely so
+// the version-watcher can range-fetch it, so don't read 1 MB to find it.
+const publishedHead = readFileSync(publishedDaemonPath, 'utf8').slice(0, 8192);
+const pm = publishedHead.match(/^DAEMON_VERSION\s*=\s*"([^"]+)"/m);
+if (!pm) fail(`DAEMON_VERSION marker not found in ${publishedDaemonPath}`);
+const publishedVersion = pm[1];
+
+if (publishedVersion !== daemonVersion) {
+  if (!process.env.MESHKORE_ALLOW_VERSION_SKEW) {
+    fail(
+      `REFUSING TO BUILD — daemon source is ${daemonVersion} but the publish ` +
+      `surface still serves ${publishedVersion}.\n` +
+      `  Shipping this cockpit would pin EXPECTED_DAEMON_VERSION to ` +
+      `${daemonVersion}, which the CDN does not serve: every cluster would ` +
+      `loop on "Updating MeshKore Core…" forever.\n` +
+      `  Publish the bundle first:\n` +
+      `    cd ../daemon && python3 bundle.py \\\n` +
+      `      && cp dist/daemon.py dist/daemon.py.sig ` +
+      `../architect/public/reference/cluster/scripts/\n` +
+      `  Then commit public/reference/cluster/scripts/ and rebuild.\n` +
+      `  (Deliberately building a cockpit AHEAD of the CDN — a daemon ` +
+      `refactor in flight — set MESHKORE_ALLOW_VERSION_SKEW=1; EXPECTED then ` +
+      `pins to the PUBLISHED ${publishedVersion}, not the source.)`,
+    );
+  }
+  // Escape hatch: pin the cockpit to what the CDN actually serves. Pinning
+  // BEHIND is safe (the daemon is merely "ahead"); pinning AHEAD is the loop.
+  console.warn(
+    `[sync-daemon-version] MESHKORE_ALLOW_VERSION_SKEW — source is ` +
+    `${daemonVersion} but the CDN serves ${publishedVersion}; pinning ` +
+    `EXPECTED to the published ${publishedVersion}.`,
+  );
+  daemonVersion = publishedVersion;
+}
 
 let versionSrc;
 try {
