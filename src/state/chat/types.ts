@@ -40,12 +40,6 @@ export interface ConvMeta {
    *  and frozen after the first dispatch. Passed as `member` on every
    *  dispatch so the daemon loads that member's init prompt + refs. */
   member?: string;
-  /** ATM14d — epoch ms of the last deliberate header retune per dial.
-   *  Set by setConvModel/setConvEffort on a real pin, cleared when the
-   *  dial goes back to follow-the-member. Absent = legacy/unstamped pin,
-   *  which always loses to the member file (see pinIsLive). */
-  modelPinAt?: number;
-  effortPinAt?: number;
   location: { type: 'local' | 'remote'; host?: string; provider?: string };
 }
 

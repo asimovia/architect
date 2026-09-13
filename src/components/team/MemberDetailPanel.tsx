@@ -15,10 +15,6 @@
 import { Show, createEffect, createMemo, createResource, createSignal } from 'solid-js';
 import { daemonStore } from '~/state/daemon';
 import { teamStore } from '~/state/team';
-import { chatStore } from '~/state/chat';
-import { activeClusterId } from '~/state/chat/store';
-import { stalePins } from '~/lib/member-shadow';
-import { recordEngineSave } from '~/lib/engine-save-stamps';
 import { DEFAULT_PROVIDER } from '~/lib/models';
 import type { EngineChoice } from '~/components/team/ClientModelEffortPicker';
 import { ModelSection } from '~/components/team/detail/ModelSection';
@@ -96,30 +92,10 @@ export default function MemberDetailPanel(props: { memberId: string; onClose: ()
       setError(`Save failed (HTTP ${res.status}) — reverted.`);
       return;
     }
-    // ATM14b — the member file is the source of truth: on every engine
-    // save, bound convs whose model/effort pins differ from the saved
-    // values silently go back to follow-the-member, so the next dispatch
-    // already carries the new config. No banner, no click. Pins already
-    // equal to the file are left alone. client/provider need nothing:
-    // the cockpit never sends them, so the file always wins for those.
-    if (section === 'model') {
-      // ATM14d — stamp this engine save: header pins set BEFORE this
-      // moment go stale (the file wins at the next dispatch), pins the
-      // operator retunes AFTER it stay live until the following save.
-      recordEngineSave(activeClusterId(), props.memberId);
-      const fileModel = (res.member.model ?? '').trim();
-      const fileEffort = (res.member.effort ?? '').trim();
-      for (const s of stalePins(
-        chatStore.state.convMeta,
-        chatStore.state.archivedConvs,
-        props.memberId,
-        fileModel,
-        fileEffort,
-      )) {
-        if (s.resetModel) chatStore.setConvModel(s.conv, 'auto');
-        if (s.resetEffort) chatStore.setConvEffort(s.conv, 'default');
-      }
-    }
+    // ATM14g — nothing else to do here. The daemon applies an engine change
+    // to every conv bound to this member as part of the save (permanently, on
+    // disk) and broadcasts it, so open headers follow within ~1s and the next
+    // turn — in this tab or any other — already runs the new CLI + LLM.
   };
 
   const del = async (): Promise<void> => {

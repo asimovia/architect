@@ -17,8 +17,6 @@ import { Show, createSignal } from 'solid-js';
 import { chatStore, ONBOARDING_CONV_ID, isFixedAgentConv, type ConvMeta } from '~/state/chat';
 import { isConvWorking } from '~/state/live-selectors';
 import { resolveDisplayEngine } from '~/lib/member-shadow';
-import { engineSaveAt, engineSaveTick } from '~/lib/engine-save-stamps';
-import { activeClusterId } from '~/state/chat/store';
 import { teamStore } from '~/state/team';
 import { agentVisualInfo } from '~/lib/agent-types';
 import { debugDropCount } from '~/lib/debug-transport';
@@ -58,28 +56,14 @@ export default function ChatScopeStrip(props: Props) {
   };
 
   const snap = () => chatStore.state.convs[props.conv] ?? null;
-  // ATM14c/d — a conv bound to a roster member shows the LIVE member
-  // file values, not the daemon snap (which still carries the pre-save
-  // sidecar). Saving the member therefore updates every open header in
-  // realtime via the team.updated WS hydrate — no click, no new turn.
-  // A header retune (a pin) shows only while live per pinIsLive
-  // (retuned after the last engine save); legacy/pre-save pins read as
-  // the roster value, matching what dispatch sends. Unbound convs keep
-  // daemon-snap-first.
-  // ATM14e — subscribe to the reactive save epoch: engineSaveAt is a
-  // plain localStorage read and never notifies Solid, so without this
-  // the header would wait for the next convMeta/team change instead of
-  // updating at the state level the moment the member is saved — in this
-  // tab AND in every other open tab (storage event).
-  const engine = () => {
-    engineSaveTick();
-    return resolveDisplayEngine(
-      props.meta,
-      snap(),
-      teamStore.get(props.meta?.member),
-      props.meta?.member ? engineSaveAt(activeClusterId(), props.meta.member) : null,
-    );
-  };
+  // ATM14g — the header reads the same three sources the daemon resolves a
+  // turn from, in the same order (conv override → member card → snapshot), so
+  // what it shows is what the next turn runs. Saving the member card updates
+  // it within ~1s without a click: the daemon writes the new engine into the
+  // conv's sidecar and broadcasts `conv.meta_updated`, and the roster
+  // re-hydrates on `team.updated` — both are reactive stores, both feed here.
+  const engine = () =>
+    resolveDisplayEngine(props.meta, snap(), teamStore.get(props.meta?.member));
   const modelId = (): string => engine().model;
   const effortId = (): string => engine().effort;
   const clientId = (): string => engine().client;

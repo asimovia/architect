@@ -43,15 +43,22 @@ function baseSummary(conv: string, prev: ChatConvSummary | undefined, ts: string
 
 /** MP3 — mirror daemon-authoritative model/effort/client onto the local
  *  convMeta so the rail card, the chat badges and the next dispatch all
- *  agree with what the daemon will actually launch. */
+ *  agree with what the daemon will actually launch.
+ *
+ *  ATM14g — a CLEAR has to travel too. Saving a member card that pins no
+ *  model makes the daemon drop the key from every bound conv's sidecar and
+ *  send it back as `null`; mirroring only truthy values left the old model
+ *  sitting in convMeta, and the very next dispatch put it back on the wire.
+ *  A key the daemon did not send at all (older daemon) is still left alone —
+ *  absent and null are different answers. */
 function mirrorMeta(conv: string, ev: DaemonEvent): void {
   if (!state.convMeta[conv]) return;
-  const model = str(ev.model);
-  const effort = str(ev.effort);
-  const client = str(ev.client);
-  if (model) setState('convMeta', conv, 'model', model);
-  if (effort) setState('convMeta', conv, 'effort', effort);
-  if (client) setState('convMeta', conv, 'client', client);
+  const follow: Record<string, string> = { model: 'auto', effort: 'default', client: '' };
+  for (const key of ['model', 'effort', 'client'] as const) {
+    if (!(key in ev)) continue;
+    const value = str(ev[key]);
+    setState('convMeta', conv, key, value || follow[key]);
+  }
 }
 
 function onCreatedOrMetaUpdated(conv: string, ev: DaemonEvent): void {

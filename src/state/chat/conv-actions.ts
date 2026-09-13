@@ -144,25 +144,19 @@ export function setConvTitle(conv: string, title: string): void {
 
 /** agent-team (ATM7) — set the conv's model live. Every turn is a fresh
  *  `claude -p`, so the change applies from the NEXT dispatch.
- *  ATM14d — a real pin (anything but 'auto') stamps `modelPinAt`, so a
- *  later member save can tell this deliberate retune from a stale
- *  leftover; following the member again ('auto') clears the stamp. */
+ *  ATM14g — a retune here lasts until the member card's engine is saved
+ *  again, at which point the daemon stamps the card's value back over it
+ *  (and tells every open tab). Nothing to timestamp on this side. */
 export function setConvModel(conv: string, model: string): void {
   ensureConvMeta(conv);
   setState('convMeta', conv, 'model', model);
-  const pin = model.trim() !== '' && model.trim() !== 'auto';
-  setState('convMeta', conv, 'modelPinAt', pin ? Date.now() : undefined);
   saveConvMeta();
 }
 
-/** agent-team (ATM7) — reasoning depth; same next-turn semantics.
- *  ATM14d — same stamp rule as {@link setConvModel}, tracked per dial in
- *  `effortPinAt` so retuning one dial never revives the other's stale pin. */
+/** agent-team (ATM7) — reasoning depth; same next-turn semantics. */
 export function setConvEffort(conv: string, effort: string): void {
   ensureConvMeta(conv);
   setState('convMeta', conv, 'effort', effort);
-  const pin = effort.trim() !== '' && effort.trim() !== 'default';
-  setState('convMeta', conv, 'effortPinAt', pin ? Date.now() : undefined);
   saveConvMeta();
 }
 
