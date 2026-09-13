@@ -1,44 +1,41 @@
 /**
- * NewMemberDialog — ATM4. Free-text mission → structured member draft.
+ * NewMemberDialog — single-form member creator (ATM13 supersedes the ATM4
+ * two-step input → draft → review wizard).
  *
- * Flow: (1) operator types a paragraph + name + emoji, (2) POST
- * /team/draft runs the daemon's LLM normaliser, (3) operator reviews /
- * tweaks the structured fields (model is a required picker), (4) POST
- * /team creates the member; the roster picks it up via the team.created
- * WS event and highlights the new card.
+ * One screen, everything editable: name + emoji, plain-language mission,
+ * engine picker, references, init prompt. "Draft with AI" is an optional
+ * assist that fills prompt/refs/engine from the daemon normaliser — never
+ * a gate. Create POSTs /team, the roster picks it up optimistically, the
+ * dialog closes on success.
  *
- * Error paths (ATM4): normaliser failure → jump straight to review with
- * the raw text prefilled as the prompt + safe defaults; slug collision
- * (409) → suggest a suffixed name so the operator is never dead-ended.
+ * The modal is persistent: backdrop click, Escape and the header ✕ are
+ * disabled — the ONLY way out is Cancel or Create, so a stray click never
+ * eats half-written text.
  *
- * AX17 moved the two form steps into `team/new-member/`; the engine
- * picker is shared with MemberDetailPanel so both write the same
- * client/provider/model/effort combination.
+ * Each member's init prompt lives in `.meshkore/team/<id>.md` (daemon
+ * TeamStore, frontmatter + body) — readable from any client (VS Code…).
+ * Name/model config also lives there as frontmatter; the daemon is the
+ * source of truth, the cockpit only renders it.
  */
 
-import { Match, Show, Switch, createMemo, createSignal } from 'solid-js';
+import { For, Show, createMemo, createSignal } from 'solid-js';
 import { Modal } from '~/components/Modal';
 import { daemonStore } from '~/state/daemon';
 import { teamStore } from '~/state/team';
 import { DEFAULT_PROVIDER } from '~/lib/models';
-import { engineBody, type EngineChoice } from '~/components/team/ClientModelEffortPicker';
-import { InputStep } from '~/components/team/new-member/InputStep';
-import { ReviewStep } from '~/components/team/new-member/ReviewStep';
+import { ClientModelEffortPicker, engineBody, type EngineChoice } from '~/components/team/ClientModelEffortPicker';
 import type { TeamCreateBody } from '~/lib/daemon-client';
 
-type Step = 'input' | 'loading' | 'review';
+const INPUT_CLASS =
+  'w-full bg-[#020617] border border-gray-700/40 rounded px-2.5 py-1.5 text-[13px] text-gray-100 placeholder-gray-600 focus:outline-none focus:border-emerald-500/55';
+const LABEL_CLASS = 'block font-mono text-[10px] uppercase tracking-[0.14em] text-gray-500 mb-1.5';
 
 export default function NewMemberDialog(props: { onClose: () => void; onCreated?: (id: string) => void }) {
   const client = () => daemonStore.state.client;
 
-  const [step, setStep] = createSignal<Step>('input');
-
-  // Step 1 fields.
-  const [rawText, setRawText] = createSignal('');
   const [name, setName] = createSignal('');
   const [emoji, setEmoji] = createSignal('🤖');
-
-  // Step 3 (review) fields — prefilled from the draft.
+  const [mission, setMission] = createSignal('');
   const [engine, setEngine] = createSignal<EngineChoice>({
     client: 'claude-code',
     provider: DEFAULT_PROVIDER,
@@ -50,46 +47,53 @@ export default function NewMemberDialog(props: { onClose: () => void; onCreated?
 
   const [error, setError] = createSignal<string | null>(null);
   const [saving, setSaving] = createSignal(false);
+  const [drafting, setDrafting] = createSignal(false);
 
-  const canSubmitInput = createMemo(() => name().trim().length > 0 && rawText().trim().length > 0);
+  const canCreate = createMemo(
+    () => name().trim().length > 0 && (prompt().trim().length > 0 || mission().trim().length > 0) && !saving(),
+  );
 
+  /** Optional assist: ask the daemon normaliser to draft prompt/refs/engine
+   *  from name + mission. Fills the fields in place; everything stays
+   *  editable. Failure just shows a hint — never blocks manual creation. */
   const runDraft = async (): Promise<void> => {
     const c = client();
-    if (!c || !canSubmitInput()) return;
+    if (!c || !mission().trim()) return;
+    setDrafting(true);
     setError(null);
-    setStep('loading');
-    const res = await c.teamDraft({ name: name().trim(), emoji: emoji().trim() || '🤖', raw_text: rawText().trim() });
-    if (res.ok) {
-      const d = res.data;
-      setEngine((e) => ({ ...e, model: d.model || 'sonnet', effort: d.effort || 'default' }));
-      setRefs(Array.isArray(d.refs) ? d.refs : []);
-      setPrompt(d.prompt || rawText().trim());
-      if (d.name) setName(d.name);
-      if (d.emoji) setEmoji(d.emoji);
-    } else {
-      // Normaliser failed (timeout / key missing / no /team/draft route):
-      // fall through to review with the raw text + safe defaults so the
-      // operator can still save manually.
-      setEngine((e) => ({ ...e, model: 'sonnet', effort: 'default' }));
-      setRefs([]);
-      setPrompt(rawText().trim());
-      setError('Auto-draft unavailable — review the fields below and save manually.');
+    try {
+      const res = await c.teamDraft({ name: name().trim() || 'member', emoji: emoji().trim() || '🤖', raw_text: mission().trim() });
+      if (res.ok) {
+        const d = res.data;
+        setEngine((e) => ({ ...e, model: d.model || e.model, effort: d.effort || e.effort }));
+        setRefs(Array.isArray(d.refs) ? d.refs : []);
+        if (d.prompt) setPrompt(d.prompt);
+        if (d.name && !name().trim()) setName(d.name);
+        if (d.emoji && emoji().trim() === '🤖') setEmoji(d.emoji);
+      } else {
+        setError('Auto-draft unavailable — fill the init prompt manually.');
+      }
+    } catch {
+      setError('Auto-draft unavailable — fill the init prompt manually.');
     }
-    setStep('review');
+    setDrafting(false);
   };
 
   const create = async (): Promise<void> => {
     const c = client();
-    if (!c) return;
+    if (!c || !canCreate()) return;
     setSaving(true);
     setError(null);
+    // The init prompt IS the member file body (daemon team_create stores
+    // body/prompt verbatim in `.meshkore/team/<id>.md`); mission text is
+    // the fallback so Create never needs the draft step.
     const body: TeamCreateBody = {
       name: name().trim(),
       emoji: emoji().trim() || '🤖',
       ...engineBody(engine()),
       kind: 'profile',
       refs: refs().map((r) => r.trim()).filter(Boolean),
-      prompt: prompt(),
+      prompt: prompt().trim() || mission().trim(),
     };
     const res = await teamStore.create(c, body);
     setSaving(false);
@@ -99,7 +103,6 @@ export default function NewMemberDialog(props: { onClose: () => void; onCreated?
       return;
     }
     if (res.status === 409) {
-      // Slug collision — suggest a suffix so the operator isn't stuck.
       setName((n) => (/-\d+$/.test(n) ? n.replace(/-(\d+)$/, (_, d) => `-${Number(d) + 1}`) : `${n}-2`));
       setError('A member with that name already exists — a suffix was suggested. Adjust and Create again.');
       return;
@@ -108,36 +111,26 @@ export default function NewMemberDialog(props: { onClose: () => void; onCreated?
   };
 
   const onModalClose = (id: string | null) => {
-    if (id === 'back') { setStep('input'); return; }
-    if (id === 'draft') { void runDraft(); return; }
     if (id === 'create') { void create(); return; }
+    if (saving()) return; // don't let Cancel slip while the POST is in flight
     props.onClose();
   };
 
-  const buttons = createMemo(() => {
-    if (step() === 'input') {
-      return [
-        { id: 'cancel', label: 'Cancel' },
-        { id: 'draft', label: 'Draft with AI', primary: true },
-      ];
-    }
-    if (step() === 'review') {
-      return [
-        { id: 'back', label: 'Back' },
-        { id: 'create', label: saving() ? 'Creating…' : 'Create', primary: true },
-      ];
-    }
-    return [{ id: 'cancel', label: 'Cancel' }];
-  });
+  const setRefAt = (i: number, v: string) => setRefs(refs().map((r, j) => (j === i ? v : r)));
+  const removeRef = (i: number) => setRefs(refs().filter((_, j) => j !== i));
 
   return (
     <Modal
       isOpen={true}
       onClose={onModalClose}
       title="New team member"
-      subtitle="Describe the member in plain language — the daemon drafts a structured profile you confirm."
+      subtitle="Everything on one screen — describe, optionally draft with AI, Create."
       zIndex={60}
-      buttons={buttons()}
+      persistent
+      buttons={[
+        { id: 'cancel', label: 'Cancel' },
+        { id: 'create', label: saving() ? 'Creating…' : 'Create', primary: true },
+      ]}
     >
       <Show when={error()}>
         <div class="mb-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-200">
@@ -145,41 +138,104 @@ export default function NewMemberDialog(props: { onClose: () => void; onCreated?
         </div>
       </Show>
 
-      <Switch>
-        <Match when={step() === 'input'}>
-          <InputStep
-            name={name()}
-            onName={setName}
-            emoji={emoji()}
-            onEmoji={setEmoji}
-            rawText={rawText()}
-            onRawText={setRawText}
-            canSubmit={canSubmitInput()}
-          />
-        </Match>
-
-        <Match when={step() === 'loading'}>
-          <div class="flex items-center gap-3 py-10 justify-center text-gray-400">
-            <span class="inline-block w-4 h-4 rounded-full border-2 border-emerald-400/70 border-t-transparent animate-spin" aria-hidden="true" />
-            <span class="text-[13px]">Drafting the member profile… (2–5s)</span>
+      <div class="space-y-4">
+        <div class="flex gap-3">
+          <div class="flex-1">
+            <label class={LABEL_CLASS}>Name</label>
+            <input
+              type="text"
+              autofocus
+              value={name()}
+              onInput={(e) => setName(e.currentTarget.value)}
+              placeholder="e.g. SEO writer"
+              class={INPUT_CLASS}
+            />
           </div>
-        </Match>
+          <div class="w-24">
+            <label class={LABEL_CLASS}>Emoji</label>
+            <input
+              type="text"
+              value={emoji()}
+              onInput={(e) => setEmoji(e.currentTarget.value)}
+              maxLength={4}
+              class="w-full bg-[#020617] border border-gray-700/40 rounded px-2.5 py-1.5 text-[16px] text-center text-gray-100 focus:outline-none focus:border-emerald-500/55"
+            />
+          </div>
+        </div>
 
-        <Match when={step() === 'review'}>
-          <ReviewStep
-            name={name()}
-            onName={setName}
-            emoji={emoji()}
-            onEmoji={setEmoji}
-            engine={engine()}
-            onEngine={setEngine}
-            refs={refs()}
-            onRefs={setRefs}
-            prompt={prompt()}
-            onPrompt={setPrompt}
+        <div>
+          <label class={LABEL_CLASS}>What does this member do (plain language)</label>
+          <textarea
+            rows={4}
+            value={mission()}
+            onInput={(e) => setMission(e.currentTarget.value)}
+            placeholder="Its mission, the docs it should know, the credentials it can access, its limits."
+            class="w-full bg-[#020617] border border-gray-700/40 rounded px-2.5 py-2 text-[13px] leading-relaxed text-gray-100 placeholder-gray-600 focus:outline-none focus:border-emerald-500/55 resize-y"
           />
-        </Match>
-      </Switch>
+        </div>
+
+        <ClientModelEffortPicker value={engine()} onChange={setEngine} labels />
+
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="font-mono text-[10px] uppercase tracking-[0.14em] text-gray-500">References</label>
+            <button
+              type="button"
+              onClick={() => setRefs([...refs(), ''])}
+              class="text-[11px] font-mono text-emerald-300/80 hover:text-emerald-200"
+            >+ add</button>
+          </div>
+          <div class="space-y-1.5">
+            <For each={refs()}>
+              {(r, i) => (
+                <div class="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={r}
+                    onInput={(e) => setRefAt(i(), e.currentTarget.value)}
+                    placeholder=".meshkore/context/stack.md"
+                    class="flex-1 bg-[#020617] border border-gray-700/40 rounded px-2 py-1 text-[12px] font-mono text-gray-100 focus:outline-none focus:border-emerald-500/55"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeRef(i())}
+                    class="px-2 text-gray-500 hover:text-red-300"
+                    title="Remove"
+                    aria-label="Remove reference"
+                  >✕</button>
+                </div>
+              )}
+            </For>
+            <Show when={refs().length === 0}>
+              <p class="text-[11px] text-gray-600 italic">No references. Add paths/URLs the member should consult.</p>
+            </Show>
+          </div>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="font-mono text-[10px] uppercase tracking-[0.14em] text-gray-500">Init prompt</label>
+            <button
+              type="button"
+              disabled={!mission().trim() || drafting()}
+              onClick={() => void runDraft()}
+              class="text-[11px] font-mono text-emerald-300/80 hover:text-emerald-200 disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Fill from the mission text via the daemon normaliser"
+            >{drafting() ? 'Drafting…' : 'Draft with AI'}</button>
+          </div>
+          <textarea
+            rows={10}
+            value={prompt()}
+            onInput={(e) => setPrompt(e.currentTarget.value)}
+            placeholder="The member's initialisation text — saved verbatim to .meshkore/team/<id>.md. If left empty, the mission text above is used."
+            class="w-full bg-[#020617] border border-gray-700/40 rounded px-2.5 py-2 text-[12px] font-mono leading-relaxed text-gray-100 placeholder-gray-600 focus:outline-none focus:border-emerald-500/55 resize-y"
+          />
+        </div>
+
+        <Show when={!canCreate() && !saving()}>
+          <p class="text-[11px] text-gray-500">A name plus a mission or an init prompt are required.</p>
+        </Show>
+      </div>
     </Modal>
   );
 }

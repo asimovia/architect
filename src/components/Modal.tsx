@@ -19,6 +19,10 @@ export type ModalProps = {
   subtitleNode?: JSX.Element;
   buttons?: ModalButton[];
   floating?: boolean;
+  /** Persistent modal: ignores backdrop clicks, Escape and hides the
+   *  header ✕ — the ONLY way out is a footer button (Cancel / Create).
+   *  For forms with unsaved operator text (e.g. NewMemberDialog). */
+  persistent?: boolean;
   zIndex?: number;
   children?: JSX.Element;
   bodyRef?: (el: HTMLDivElement) => void;
@@ -38,7 +42,7 @@ function btnCls(b: ModalButton): string {
 
 export function Modal(props: ModalProps): JSX.Element {
   createEffect(() => {
-    if (!props.isOpen) return;
+    if (!props.isOpen || props.persistent) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') props.onClose(null);
     };
@@ -47,7 +51,7 @@ export function Modal(props: ModalProps): JSX.Element {
   });
 
   const onBackdropClick = (e: MouseEvent) => {
-    if (props.floating) return;
+    if (props.floating || props.persistent) return;
     if (e.target === e.currentTarget) props.onClose(null);
   };
 
@@ -78,14 +82,16 @@ export function Modal(props: ModalProps): JSX.Element {
                   <div class="mt-1">{props.subtitleNode}</div>
                 </Show>
               </div>
-              <button
-                type="button"
-                aria-label="Close"
-                class="text-gray-400 hover:text-gray-100 px-2 py-1 rounded transition"
-                onClick={() => props.onClose(null)}
-              >
-                ✕
-              </button>
+              <Show when={!props.persistent}>
+                <button
+                  type="button"
+                  aria-label="Close"
+                  class="text-gray-400 hover:text-gray-100 px-2 py-1 rounded transition"
+                  onClick={() => props.onClose(null)}
+                >
+                  ✕
+                </button>
+              </Show>
             </header>
             <div
               class="px-5 py-4 overflow-y-auto min-h-0 text-gray-300"
