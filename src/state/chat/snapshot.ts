@@ -49,6 +49,10 @@ function seedOrHealMeta(c: ChatConvSummary): void {
   }
   if (c.agent_id && !existing.agentId) setState('convMeta', c.conv, 'agentId', c.agent_id);
   if (c.member && !existing.member) setState('convMeta', c.conv, 'member', c.member);
+  // CN10 — heal stale localStorage entries saved with an empty title: without
+  // this the rail (title → conv) and the header rendered different fallbacks
+  // for the same conv. Seed default matches fresh-meta creation above.
+  if (!existing.title?.trim()) setState('convMeta', c.conv, 'title', c.agent_id || c.conv);
 }
 
 /**

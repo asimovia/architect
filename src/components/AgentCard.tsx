@@ -57,7 +57,9 @@ export interface AgentCardProps {
 
 export default function AgentCard(props: AgentCardProps) {
   const isRemote = () => props.meta.location?.type === 'remote';
-  const title = () => props.meta.title || props.conv;
+  // CN10 — canonical display name (title → conv slug), mirrored in
+  // ChatScopeStrip. The A00N agentId stays in the tooltip only.
+  const title = () => props.meta.title?.trim() || props.conv;
   // Resolve the visual info (emoji + colour + label) from the conv
   // slug + meta; for `_onboarding_v1` this resolves to Master Architect
   // regardless of stored agent_type.

@@ -42,7 +42,10 @@ interface Props {
 export default function ChatScopeStrip(props: Props) {
   const [editing, setEditing] = createSignal(false);
 
-  const title = () => props.meta?.title?.trim() || props.meta?.agentId || props.conv;
+  // CN10 — display name resolves exactly like AgentCard (title → conv
+  // slug). The A00N agentId stays internal (pill/tooltip metadata), never
+  // the primary name — otherwise rail and header show two names for one conv.
+  const title = () => props.meta?.title?.trim() || props.conv;
   // py-1.10.24 — conv-aware lookup, so the onboarding conv shows as
   // Master Architect and roadmap-architect slugs keep the cyan cap even
   // when conv_meta has drifted.
