@@ -37,8 +37,11 @@ export default function InitiativesPanel() {
   // FC-2 — the visibility filter is persisted per-project in viewStore so a
   // page refresh restores the operator's tab (notably QUEUE) instead of
   // snapping back to ACTIVE. bindCluster (App bus) reloads it on project switch.
-  const visibility = (): VisibilityFilter =>
-    (viewStore.roadmapFilter() as VisibilityFilter | null) ?? 'active';
+  // AX24 — a persisted 'all' (from before the chip was removed) falls back to 'active'.
+  const visibility = (): VisibilityFilter => {
+    const raw = viewStore.roadmapFilter() as VisibilityFilter | 'all' | null;
+    return raw === 'active' || raw === 'backlog' || raw === 'archived' || raw === 'queue' ? raw : 'active';
+  };
   const setVisibility = (f: VisibilityFilter): void => viewStore.setRoadmapFilter(f);
   const [query, setQuery] = createSignal('');
 

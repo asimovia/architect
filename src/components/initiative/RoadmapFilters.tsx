@@ -11,11 +11,11 @@
 import { For, Show } from 'solid-js';
 import { TabButton } from '~/components/ui/TabButton';
 
-export type VisibilityFilter = 'all' | 'active' | 'backlog' | 'archived' | 'queue';
+export type VisibilityFilter = 'active' | 'backlog' | 'archived' | 'queue';
 
-// Order requested by operator 2026-06-19: all · active · backlog · archived.
+// AX24 — the 'all' (everything) chip was removed: it duplicated search +
+// per-status views without answering a real question. Order: active · backlog · archived.
 const VISIBILITY_FILTERS: { id: VisibilityFilter; label: string; title: string }[] = [
-  { id: 'all',      label: 'all',      title: 'Everything — active, archived, completed, backlog, mixed' },
   { id: 'active',   label: 'active',   title: 'Initiatives in flight or up next — the operative roadmap' },
   { id: 'backlog',  label: 'backlog',  title: 'Ideas parked outside the active roadmap' },
   { id: 'archived', label: 'archived', title: 'Initiatives the operator manually archived' },
