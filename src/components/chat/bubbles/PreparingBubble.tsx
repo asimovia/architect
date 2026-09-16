@@ -34,7 +34,7 @@ export function PreparingBubble(props: { conv: string; dispatchedAt: number }) {
         tone="agent"
         onStop={() => stopConv(props.conv)}
       />
-      <div class="max-w-[90%] text-sm leading-relaxed pl-2">
+      <div class="max-w-[90%] leading-relaxed pl-2" style={{ 'font-size': 'var(--fs-chat)' }}>
         <ThinkingPlaceholder />
       </div>
     </div>

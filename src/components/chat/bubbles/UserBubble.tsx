@@ -32,9 +32,12 @@ export function UserBubble(props: { msg: ChatMsg; prepend?: boolean }) {
         tone={sys() ? 'agent' : 'operator'}
         suffix={props.prepend ? 'queued · merges into next turn' : undefined}
       />
-      <div class={`max-w-[85%] text-sm leading-relaxed ${
-        sys() ? 'text-left pl-2' : 'text-right pr-2'
-      } ${props.prepend ? 'text-amber-200/95' : 'text-gray-200'}`}>
+      <div
+        class={`max-w-[85%] leading-relaxed ${
+          sys() ? 'text-left pl-2' : 'text-right pr-2'
+        } ${props.prepend ? 'text-amber-200/95' : 'text-gray-200'}`}
+        style={{ 'font-size': 'var(--fs-chat)' }}
+      >
         <CollapsibleText text={props.msg.text} />
       </div>
       <Show when={props.msg.attachments && props.msg.attachments.length > 0}>

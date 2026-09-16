@@ -89,9 +89,12 @@ export function AssistantBubble(props: { conv: string; msg: ChatMsg; headerless?
           <Show when={showsValidationGreen()}>
             <ValidationGreenBadge />
           </Show>
-          <div class={`text-sm leading-relaxed max-w-[90%] pl-2 ${
-            props.msg.cancelled ? 'text-red-300/95' : 'text-gray-200'
-          }`}>
+          <div
+            class={`leading-relaxed max-w-[90%] pl-2 ${
+              props.msg.cancelled ? 'text-red-300/95' : 'text-gray-200'
+            }`}
+            style={{ 'font-size': 'var(--fs-chat)' }}
+          >
             <Show
               when={props.msg.streaming}
               fallback={
