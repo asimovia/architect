@@ -42,6 +42,9 @@ export interface AgentCardProps {
   /** When true (rail < 160 px but ≥ 60 px), drop the location chip and
    *  use a tighter metadata row. */
   medium?: boolean;
+  /** HD-12 — briefs this member session is holding, from the daemon's
+   *  open-request ledger. Empty for an ordinary conv. */
+  waiting?: Array<{ parent_label?: string; parent_conv?: string; brief?: string }>;
   /** 2026-06-13 — raw rail width, so the metadata row can shed pills
    *  progressively (type → +model → +L/R) instead of clipping. */
   railWidth?: number;
@@ -251,6 +254,27 @@ export default function AgentCard(props: AgentCardProps) {
                   title={`Client: ${props.meta.client}`}
                 >
                   {props.meta.client?.slice(0, 6)}
+                </span>
+              </Show>
+              {/* HD-12 — how many agents are waiting on this member. It
+                  goes in the metadata row, not beside the name: names vary
+                  wildly in length and this must never squeeze one. Amber,
+                  because it is a queue, not an error. */}
+              <Show when={(props.waiting?.length ?? 0) > 0}>
+                <span
+                  class="inline-flex items-center px-1.5 py-px rounded border flex-shrink-0"
+                  style={{
+                    color: 'var(--theme-warn-bright, #fbbf24)',
+                    'border-color': 'rgba(251, 191, 36, 0.45)',
+                  }}
+                  title={
+                    `Holding ${props.waiting!.length} brief(s):\n` +
+                    props.waiting!
+                      .map((r) => `· ${r.parent_label || r.parent_conv || '?'} — ${(r.brief || '').slice(0, 80)}`)
+                      .join('\n')
+                  }
+                >
+                  ⇠{props.waiting!.length}
                 </span>
               </Show>
               {/* Local / Remote — the coloured cue. */}

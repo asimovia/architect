@@ -161,6 +161,13 @@ export default function ChatRail() {
   // matches when the rail is at its narrowest (name-only) layout.
   const compact = narrow;
 
+  // HD-12 — the briefs this member session is holding. One row per
+  // member means the rail no longer fills with per-errand convs; what the
+  // operator still needs to see is who is queued behind whom.
+  const openRequests = (conv: string) =>
+    ((chatStore.state.convs[conv] as { open_requests?: Array<{ parent_label?: string; parent_conv?: string; brief?: string }> } | undefined)
+      ?.open_requests) ?? [];
+
   return (
     <aside class={`chat-rail-stack ${compact() ? 'compact' : ''}`}>
       {/* 2026-06-19 — the rail header (Agents + "+") moved up into the
@@ -176,6 +183,7 @@ export default function ChatRail() {
                 active={chatStore.state.activeConv === c}
                 status={statusOf(c)}
                 pendingReview={false}
+                waiting={openRequests(c)}
                 stripe={agentVisualColor(c, meta())}
                 compact={compact()}
                 medium={medium()}

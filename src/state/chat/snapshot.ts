@@ -18,8 +18,21 @@ import { state, setState, activeClusterId } from './store';
 import { saveConvMeta } from './persistence';
 import { ONBOARDING_CONV_ID, type ConvMeta } from './types';
 
+/** One brief a member session is holding, from the daemon's open-request
+ *  ledger (standard §28.6, py-1.35.19). The rail shows how many there are;
+ *  the tooltip names who is waiting. */
+export type OpenRequest = {
+  id?: string;
+  parent_conv?: string;
+  parent_label?: string;
+  task_id?: string;
+  brief?: string;
+  at?: string;
+};
+
 /** Snapshot fields the daemon added after `ChatConvSummary` was typed. */
 type SnapshotConv = ChatConvSummary & {
+  open_requests?: OpenRequest[];
   current_turn?: { started_at?: string; stream_id?: string; partial_text?: string };
   last_final_stream_id?: string;
   queue?: Array<{ id?: string; text: string; queued_at?: string }>;
