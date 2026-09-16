@@ -5,7 +5,7 @@
 # Source: 05d2970
 from __future__ import annotations
 
-DAEMON_VERSION = "py-1.35.17"  # early bundle marker for the version-watcher 8 KB range-fetch; canonical def inlined below.
+DAEMON_VERSION = "py-1.35.18"  # early bundle marker for the version-watcher 8 KB range-fetch; canonical def inlined below.
 
 
 
@@ -65,7 +65,7 @@ FS_POLL_SEC = 1.5
 #     "py-X.Y.Z"  # …\n)`, and all three regexes are anchored to the
 # single-line form. bundle.py refuses to build (loud, good) — but keep the
 # comment short enough that the formatter never wants to wrap it.
-DAEMON_VERSION = "py-1.35.17"  # single-delta reader finalize flush; see CHANGELOG.md
+DAEMON_VERSION = "py-1.35.18"  # single-delta reader finalize flush; see CHANGELOG.md
 
 
 # ── inlined from daemon/contextpolicy.py (DM3+ bundle) ─────────────────────────
@@ -25624,36 +25624,19 @@ class Daemon(
         re.compile(r"^\s*✓\s+task\s+\S+\s+done\b", re.IGNORECASE | re.MULTILINE),
     )
     # py-1.10.26 — Rate-limit signatures emitted by the upstream CLIs
-    # (Claude Code most commonly; Codex / DeepSeek have their own
-    # phrasing). Every pattern names a CODE, a STATUS or an exhausted
-    # RESOURCE, because that is what an error envelope carries and
-    # prose does not.
-    #
-    # py-1.35.17 — the broad version of this list was a liability, not
-    # insurance. It matched bare "rate limit", bare "429" and "Anthropic
-    # API … limit", all of which are ordinary vocabulary for an agent
-    # whose TASK is a rate-limited API: comparing free Bitcoin
-    # providers, tuning the Oracle's backoff, documenting a free tier.
-    # A child that merely explained mempool.space's limits would be
-    # classified `rate-limited`, and the cost of that is not cosmetic —
-    # `_pause_agent_type` locks the whole agent_type for 30 min and
-    # every later dispatch of it 503s. Over-pausing on a misread is
-    # worse than a late pause on a real quota: a real one repeats on
-    # the next turn and gets caught then.
+    # (Claude Code most commonly; Codex / DeepSeek would have their own
+    # phrasing once integrated). The patterns are intentionally broad
+    # so a phrasing change in a future CLI build still triggers — we'd
+    # rather over-pause than spin on a quota-exhausted subagent forever.
     _RATE_LIMIT_PATTERNS = (
         re.compile(r"Claude AI usage limit reached", re.IGNORECASE),
         re.compile(r"\busage limit (reached|exceeded)\b", re.IGNORECASE),
-        re.compile(r"rate_limit_error", re.IGNORECASE),
-        re.compile(
-            r"\b(?:api error|http(?:\s*status)?|status(?:\s*code)?|error code)"
-            r"\s*:?\s*429\b",
-            re.IGNORECASE,
-        ),
-        re.compile(r"\b429\b[^\n]{0,80}\brequest_id\b", re.IGNORECASE),
-        re.compile(r"\bquota (exceeded|exhausted)\b", re.IGNORECASE),
-        re.compile(r"\bsubscription[\s\w-]*quota[\s\w-]*exhaust", re.IGNORECASE),
-        re.compile(r"\bcredits?[\s\w-]*exhaust", re.IGNORECASE),
-        re.compile(r"\bout of (credit|credits|quota)\b", re.IGNORECASE),
+        re.compile(r"\brate[- ]?limit(ed|ing)?\b", re.IGNORECASE),
+        re.compile(r"\bquota (exceeded|reached|exhausted)\b", re.IGNORECASE),
+        re.compile(r"\b5[- ]hour (limit|window)\b", re.IGNORECASE),
+        re.compile(r"\bHTTP[\s/]+429\b"),
+        re.compile(r"\btoo many requests\b", re.IGNORECASE),
+        re.compile(r"Anthropic API .*\b(limit|quota)\b", re.IGNORECASE | re.DOTALL),
     )
 
     # py-1.12.16+: graceful-drain default. Configurable via
