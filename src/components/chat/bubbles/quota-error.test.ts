@@ -25,6 +25,38 @@ describe('detectQuotaError', () => {
     assert.equal(detectQuotaError('See error 429 in the docs'), null);
     assert.equal(detectQuotaError(''), null);
   });
+
+  // 2026-09-16 — the cockpit hid two complete, correct answers behind a
+  // quota card. The daemon had NOT rate-limited anything: /health showed
+  // zero paused pools and the local CLI was authenticated. The agent had
+  // been asked which free Bitcoin API to use, so it said "rate limit"
+  // and "429" the way any answer on that subject must.
+  it('does not swallow an answer that TALKS about rate limits', () => {
+    const answer =
+      '**Maestro: cero dependencias.** No aparece en ningun fichero del repo.\n\n' +
+      'Hoy todo va por `explorer-wallet-service` (nuestro indexador) con failover a `mempool.space`.\n\n' +
+      '- **Primario**: `explorerWalletService` (RPC directo del nodo, sin rate limit).\n' +
+      '- `mempool-service.js` ya autolimita a 600ms entre peticiones con backoff 2s/5s en 429.\n';
+    assert.equal(detectQuotaError(answer), null);
+  });
+
+  it('does not fire on prose that names an exhausted quota late', () => {
+    const answer =
+      'He revisado los tres proveedores y te dejo el resumen abajo, con el coste de cada uno.\n\n' +
+      'El plan gratuito de QuickNode se queda corto: en cuanto pasas de 300 req/s la key ' +
+      'queda out of credits y el endpoint responde too many requests.';
+    assert.equal(detectQuotaError(answer), null);
+  });
+
+  it('still fires when the envelope opens the message', () => {
+    assert.ok(detectQuotaError('Claude AI usage limit reached|1789560000'));
+    assert.ok(detectQuotaError('[codex error] HTTP 429: too many requests'));
+    assert.ok(
+      detectQuotaError(
+        'API error 429 [request_id=abc]: quota exhausted. Your usage window resets at 2026-09-16T17:00:00Z.',
+      ),
+    );
+  });
 });
 
 describe('resetCountdown', () => {

@@ -7,8 +7,18 @@
  * Covered shapes (provider-agnostic, present + future):
  *   [muse error] API error 429 [request_id=…]: Subscription quota
  *     exhausted. Your usage window resets at 2026-09-12T17:35:09Z. (rate_limit_error)
- *   … 429, rate_limit / rate-limit / ratelimit, quota exhausted,
- *   out of credit(s), credits exhausted, usage window resets …
+ *   … "API error 429", rate_limit_error, quota exhausted,
+ *   out of credit(s), credits exhausted, "usage limit reached" …
+ *
+ * What it must NOT match is an agent TALKING about rate limits. "rate
+ * limit" and "429" are ordinary vocabulary here — an agent comparing
+ * free Bitcoin APIs, tuning the Oracle's backoff or documenting a free
+ * tier says both, constantly. Matching bare "rate limit" cost two
+ * complete, correct answers on 2026-09-16: the cockpit replaced them
+ * with a quota card while /health showed zero paused pools and the CLI
+ * was perfectly authenticated. A provider failure is an ERROR ENVELOPE
+ * — it leads with the failure and names a code — so that is what we
+ * look for, and only in the first ENVELOPE_WINDOW characters.
  */
 
 export interface QuotaInfo {
@@ -20,26 +30,31 @@ export interface QuotaInfo {
   rawReset: string | null;
 }
 
+/**
+ * How far into the text an envelope may start. A provider dump IS the
+ * failure — it opens with it, at most behind a short `[muse error]`
+ * style prefix — so the window is deliberately tight. Prose reaches the
+ * same words one clause later, which is all the separation we need and
+ * the only one that does not depend on guessing tone.
+ */
+const ENVELOPE_WINDOW = 80;
+
+/**
+ * Structural evidence that the text IS a provider error envelope.
+ * Every entry names a code, a status, or an exhausted resource — none
+ * of them is a phrase an agent uses while explaining somebody else's
+ * rate limits.
+ */
 const QUOTA_PATTERNS: RegExp[] = [
   /rate_limit_error/i,
-  /rate[\s_-]*limit/i,
-  /quota[\s\w-]*exhaust/i,
-  /exhaust[\s\w-]*quota/i,
-  /subscription[\s\w-]*quota/i,
-  /out of (credit|credits|quota)/i,
-  /credits?[\s\w-]*exhaust/i,
-  /usage window resets?/i,
-  /\b429\b/,
-];
-
-/** A bare "429" alone is weak evidence — require a quota-ish companion. */
-const BARE_429_COMPANIONS: RegExp[] = [
-  /quota/i,
-  /rate/i,
-  /credit/i,
-  /window resets?/i,
-  /request_id/i,
-  /api error/i,
+  /\b(?:api error|http(?:\s*status)?|status(?:\s*code)?|error code)\s*:?\s*429\b/i,
+  /\b429\b[^\n]{0,80}\brequest_id\b/i,
+  /\busage limit (?:reached|exceeded)\b/i,
+  /\bquota (?:exhausted|exceeded)\b/i,
+  /\bsubscription[\s\w-]*quota[\s\w-]*exhaust/i,
+  /\bcredits?[\s\w-]*exhaust/i,
+  /\bout of (?:credit|credits|quota)\b/i,
+  /\btoo many requests\b/i,
 ];
 
 const RESET_PATTERNS: RegExp[] = [
@@ -59,13 +74,10 @@ function parseResetDate(raw: string): Date | null {
 /** Null when the text is NOT a quota/rate-limit failure. */
 export function detectQuotaError(text: string): QuotaInfo | null {
   if (!text || text.length > 4000) return null;
-  const hits = QUOTA_PATTERNS.filter((p) => p.test(text));
-  if (hits.length === 0) return null;
-  // Only "429" matched → demand a companion so random "error 429"
-  // mentions without quota context don't get swallowed.
-  const onlyBare429 =
-    hits.length === 1 && (hits[0]?.source.includes('429') ?? false) && !/rate|quota|credit|reset/i.test(text.replace(/429/g, ''));
-  if (onlyBare429 && !BARE_429_COMPANIONS.some((p) => p.test(text))) return null;
+  // The envelope has to OPEN the message. An answer that discusses a
+  // provider's limits hits the same words halfway down, and swallowing
+  // that answer loses work the operator never gets to read.
+  if (!QUOTA_PATTERNS.some((p) => p.test(text.slice(0, ENVELOPE_WINDOW)))) return null;
 
   let rawReset: string | null = null;
   let resetsAt: Date | null = null;
