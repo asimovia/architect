@@ -16,6 +16,8 @@
  * the card — no stamps, no epochs, no tab-local memory.
  */
 
+import { isStaleModelForClient } from './models.ts';
+
 export interface ShadowConvMeta {
   member?: string;
   model?: string;
@@ -83,8 +85,14 @@ export function resolveDisplayEngine(
       || (meta?.client ?? '').trim()
       || (snap?.client ?? '').trim()
       || 'claude-code';
+    // ATM18: a resolved id from another client's catalog (pre-ATM17 Anthropic
+    // id under Codex, from any of the three sources) heals to the CLI default
+    // instead of painting a foreign model on this client's header — the combo
+    // then offers only that client's feasible models.
+    const rawModel = pinnedModel || (member.model ?? '').trim() || defaultModelFor(client);
+    const model = isStaleModelForClient(client, rawModel) ? defaultModelFor(client) : rawModel;
     return {
-      model: pinnedModel || (member.model ?? '').trim() || defaultModelFor(client),
+      model,
       effort: pinnedEffort || (member.effort ?? '').trim() || 'default',
       client,
       provider: pinnedProvider || memberProvider || snapProvider || 'anthropic',
@@ -93,8 +101,12 @@ export function resolveDisplayEngine(
   // Unbound conv (or a member the roster hasn't hydrated yet): the daemon
   // snapshot is the best truth available.
   const fallbackClient = (meta?.client ?? '').trim() || (snap?.client ?? '').trim() || 'claude-code';
+  const rawFallback = pinnedModel || (snap?.model ?? '').trim() || defaultModelFor(fallbackClient);
+  const fallbackModel = isStaleModelForClient(fallbackClient, rawFallback)
+    ? defaultModelFor(fallbackClient)
+    : rawFallback;
   return {
-    model: pinnedModel || (snap?.model ?? '').trim() || defaultModelFor(fallbackClient),
+    model: fallbackModel,
     effort: pinnedEffort || (snap?.effort ?? '').trim() || 'default',
     client: fallbackClient,
     provider: pinnedProvider || snapProvider || 'anthropic',

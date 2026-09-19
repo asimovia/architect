@@ -4,7 +4,7 @@
 // dependency-free leaf for this to run at all (no `~/` alias, no logger).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MODEL_CATALOG, GLM_CATALOG, MUSE_CATALOG, modelShort, modelLabel, providerCatalog } from './models.ts';
+import { MODEL_CATALOG, GLM_CATALOG, MUSE_CATALOG, modelShort, modelLabel, providerCatalog, isStaleModelForClient } from './models.ts';
 
 test('the Anthropic flagship is selectable and mirrors the daemon catalog', () => {
   const ids = MODEL_CATALOG.map((m) => m.id);
@@ -56,6 +56,26 @@ test('provider catalogs stay separate', () => {
   assert.ok(providerCatalog('zai').every((m) => m.id.startsWith('glm')));
   assert.ok(providerCatalog('anthropic').some((m) => m.id === 'claude-fable-5-1'));
   assert.ok(providerCatalog('meta').every((m) => m.id.startsWith('muse-spark')));
+});
+
+test('stale cross-client ids heal, pins and defaults survive (ATM18)', () => {
+  // The reported bug: Codex on top, Anthropic ids below.
+  assert.equal(isStaleModelForClient('codex', 'sonnet'), true);
+  assert.equal(isStaleModelForClient('codex', 'claude-opus-4-6'), true);
+  assert.equal(isStaleModelForClient('codex', 'glm-4.6'), true);
+  assert.equal(isStaleModelForClient('codex', 'muse-spark-1.3'), true);
+  assert.equal(isStaleModelForClient('codex', 'auto'), true);
+  assert.equal(isStaleModelForClient('gemini', 'opus'), true);
+  // Same-family and empty ids are feasible, never stale.
+  assert.equal(isStaleModelForClient('codex', 'gpt-5'), false);
+  assert.equal(isStaleModelForClient('codex', 'gpt-5.4'), false);
+  assert.equal(isStaleModelForClient('codex', ''), false);
+  assert.equal(isStaleModelForClient('muse', 'muse-spark-1.3'), false);
+  assert.equal(isStaleModelForClient('muse', 'sonnet'), true);
+  // claude-code accepts its own catalogs by definition.
+  assert.equal(isStaleModelForClient('claude-code', 'sonnet'), false);
+  assert.equal(isStaleModelForClient('claude-code', 'muse-spark-1.3'), false);
+  assert.equal(isStaleModelForClient('claude-code', 'auto'), false);
 });
 
 test('Muse ids resolve to labels and short badges (ATM17)', () => {

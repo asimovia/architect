@@ -115,6 +115,45 @@ export const PROVIDERS: readonly ProviderMeta[] = [
 
 export const DEFAULT_PROVIDER = 'anthropic';
 
+// ── cross-client stale ids (ATM18) ────────────────────────────────────
+//
+// A model id saved under one client can resurface under another: members
+// saved before the chained combos (ATM17) carry Anthropic ids under Codex,
+// and the pickers used to offer them back verbatim as "(member)" rows —
+// "Codex on top, Anthropic below". The rule below names the ids that are
+// only ever feasible under claude-code's provider catalogs, so the editor
+// seed (team-engine-draft) and the header resolution (member-shadow) can
+// heal them to the CLI default instead of displaying them. Unknown ids
+// (a pinned `gpt-5.4`, any future model) are NEVER stale: the daemon
+// forwards unlisted ids, and pinning must survive.
+//
+// The Muse carve-out: `muse-spark-*` ids are the muse CLI's own catalog as
+// well as the Meta provider's, so they are only stale under a client that
+// is neither claude-code nor muse.
+
+const ANTHROPIC_FAMILY_IDS: ReadonlySet<string> = new Set([
+  ...MODEL_CATALOG.map((m) => m.id),
+  ...GLM_CATALOG.map((m) => m.id),
+]);
+const MUSE_IDS: ReadonlySet<string> = new Set(MUSE_CATALOG.map((m) => m.id));
+
+/** True when `model` is a claude-code-catalog id that can never run under
+ *  `client` — a stale save from before the chained combos, not a pin.
+ *  Empty (CLI default) is always feasible; `claude-code` accepts its own
+ *  catalogs by definition; unknown ids are never stale (see above). */
+export function isStaleModelForClient(
+  client: string | null | undefined,
+  model: string | null | undefined,
+): boolean {
+  const c = (client || 'claude-code').toLowerCase();
+  const m = (model || '').trim();
+  if (!m || c === 'claude-code') return false;
+  if (m === 'auto') return true;
+  if (ANTHROPIC_FAMILY_IDS.has(m)) return true;
+  if (MUSE_IDS.has(m) && c !== 'muse') return true;
+  return false;
+}
+
 /** The model catalog for a provider id. Unknown → Anthropic (safe). */
 export function providerCatalog(providerId: string | null | undefined): readonly ModelMeta[] {
   switch ((providerId || DEFAULT_PROVIDER).toLowerCase()) {

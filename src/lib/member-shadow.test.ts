@@ -35,12 +35,24 @@ test('follow-values are not overrides', () => {
 
 test('a deliberate header retune wins over the card, per dial', () => {
   const e = resolveDisplayEngine(
-    { member: 'architect-master', model: 'opus' },
+    { member: 'architect-master', model: 'muse-spark-1.2' },
     null,
     { ...MEMBER, effort: 'high' },
   );
-  assert.equal(e.model, 'opus');
+  assert.equal(e.model, 'muse-spark-1.2');
   assert.equal(e.effort, 'high');
+});
+
+test('a retune from another client catalog heals to the CLI default (ATM18)', () => {
+  // A pre-ATM17 `opus` pin stamped on a muse member is not a choice the
+  // header can offer — it heals instead of painting a foreign model.
+  const e = resolveDisplayEngine(
+    { member: 'architect-master', model: 'opus' },
+    null,
+    MEMBER,
+  );
+  assert.equal(e.model, '');
+  assert.equal(e.client, 'muse');
 });
 
 test('the engine the daemon stamped on save is what shows', () => {
@@ -82,8 +94,8 @@ test('provider follows member → sidecar → snapshot → anthropic', () => {
 });
 
 test('an unbound conv falls back to the daemon snapshot, then the default', () => {
-  const e = resolveDisplayEngine({}, { model: 'sonnet', client: 'codex' }, undefined);
-  assert.deepEqual(e, { model: 'sonnet', effort: 'default', client: 'codex', provider: 'anthropic' });
+  const e = resolveDisplayEngine({}, { model: 'gpt-5', client: 'codex' }, undefined);
+  assert.deepEqual(e, { model: 'gpt-5', effort: 'default', client: 'codex', provider: 'anthropic' });
   assert.deepEqual(resolveDisplayEngine(undefined, null, undefined), {
     model: 'auto',
     effort: 'default',
@@ -93,9 +105,19 @@ test('an unbound conv falls back to the daemon snapshot, then the default', () =
 });
 
 test('a bound member the roster has not hydrated yet does not blank the header', () => {
-  const e = resolveDisplayEngine({ member: 'ghost', model: 'opus' }, { client: 'codex' }, undefined);
-  assert.equal(e.model, 'opus');
+  const e = resolveDisplayEngine({ member: 'ghost', model: 'gpt-5' }, { client: 'codex' }, undefined);
+  assert.equal(e.model, 'gpt-5');
   assert.equal(e.client, 'codex');
+});
+
+test('a stale snapshot id under another client heals instead of showing (ATM18)', () => {
+  // The reported bug verbatim: snapshot says Codex + `sonnet`. The header
+  // must show the CLI default, not an Anthropic id on a Codex conv.
+  const e = resolveDisplayEngine({}, { model: 'sonnet', client: 'codex' }, undefined);
+  assert.deepEqual(e, { model: '', effort: 'default', client: 'codex', provider: 'anthropic' });
+  const g = resolveDisplayEngine({ member: 'ghost', model: 'opus' }, { client: 'codex' }, undefined);
+  assert.equal(g.model, '');
+  assert.equal(g.client, 'codex');
 });
 
 test('a bound non-claude member with no model pinned defaults to the CLI default, not auto', () => {

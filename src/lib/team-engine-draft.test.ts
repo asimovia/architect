@@ -55,3 +55,17 @@ test('a claude-code member with no model pinned keeps the historic sonnet defaul
 test('an explicitly pinned model survives regardless of client', () => {
   assert.equal(engineFromSaved({ client: 'codex', model: 'gpt-5' }).model, 'gpt-5');
 });
+
+test('a model saved under another client heals to the CLI default (ATM18)', () => {
+  // Pre-ATM17 saves persist Anthropic ids under Codex — the draft must not
+  // seed them back, or the next Save re-persists the mismatch.
+  assert.equal(engineFromSaved({ client: 'codex', model: 'sonnet' }).model, '');
+  assert.equal(engineFromSaved({ client: 'codex', model: 'claude-opus-4-6' }).model, '');
+  assert.equal(engineFromSaved({ client: 'codex', model: 'auto' }).model, '');
+  assert.equal(engineFromSaved({ client: 'gemini', model: 'opus' }).model, '');
+  assert.equal(engineFromSaved({ client: 'codex', model: 'muse-spark-1.3' }).model, '');
+  // Same-family pins survive, including the muse CLI's own catalog.
+  assert.equal(engineFromSaved({ client: 'codex', model: 'gpt-5.6-terra' }).model, 'gpt-5.6-terra');
+  assert.equal(engineFromSaved({ client: 'muse', model: 'muse-spark-1.3' }).model, 'muse-spark-1.3');
+  assert.equal(engineFromSaved({ client: 'claude-code', model: 'sonnet' }).model, 'sonnet');
+});

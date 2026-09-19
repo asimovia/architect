@@ -12,7 +12,7 @@
  *    a clean draft, or when a different member is opened.
  */
 
-import { DEFAULT_PROVIDER } from './models.ts';
+import { DEFAULT_PROVIDER, isStaleModelForClient } from './models.ts';
 
 /** The four engine dials, as the picker edits them (all plain strings). */
 export interface EngineDraft {
@@ -42,10 +42,20 @@ export function engineFromSaved(m: EngineSaved | undefined): EngineDraft {
   // `sonnet`, every other driver uses the empty id — "Default (CLI config)",
   // the first row of its daemon catalog. Seeding `sonnet` under Codex is how
   // an Anthropic id got saved onto the wrong CLI.
+  // ATM18: a model saved under another client (pre-ATM17 Anthropic id under
+  // Codex) heals to the CLI default instead of seeding the draft with it —
+  // otherwise the picker shows it back as a "(member)" row and the next
+  // Save re-persists the mismatch.
+  const model =
+    !rawModel || isStaleModelForClient(client, rawModel)
+      ? client === 'claude-code'
+        ? 'sonnet'
+        : ''
+      : rawModel;
   return {
     client,
     provider: (m?.provider || '').trim() || DEFAULT_PROVIDER,
-    model: rawModel || (client === 'claude-code' ? 'sonnet' : ''),
+    model,
     effort: (m?.effort || '').trim() || 'default',
   };
 }
