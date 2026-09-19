@@ -98,6 +98,33 @@ test('a bound member the roster has not hydrated yet does not blank the header',
   assert.equal(e.client, 'codex');
 });
 
+test('a bound non-claude member with no model pinned defaults to the CLI default, not auto', () => {
+  // ATM17 follow-up: `auto` only exists in the claude-code catalog — showing
+  // it under Codex painted an Anthropic id on a non-Anthropic engine.
+  const e = resolveDisplayEngine(
+    { member: 'codex-dev' },
+    null,
+    { client: 'codex', model: '', effort: 'default' },
+  );
+  assert.deepEqual(e, { model: '', effort: 'default', client: 'codex', provider: 'anthropic' });
+});
+
+test('a bound claude-code member with no model pinned still defaults to auto', () => {
+  const e = resolveDisplayEngine(
+    { member: 'dev' },
+    null,
+    { client: 'claude-code', model: '', effort: '' },
+  );
+  assert.equal(e.model, 'auto');
+  assert.equal(e.client, 'claude-code');
+});
+
+test('an unbound codex conv with no model anywhere defaults to the CLI default', () => {
+  const e = resolveDisplayEngine({}, { model: '', client: 'codex' }, undefined);
+  assert.equal(e.model, '');
+  assert.equal(e.client, 'codex');
+});
+
 test('withLiveOption appends an unlisted live value, and only that', () => {
   const opts = [{ id: 'opus', label: 'Opus' }];
   assert.deepEqual(withLiveOption(opts, 'muse-spark-1.3-contributor'), [

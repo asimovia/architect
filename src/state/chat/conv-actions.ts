@@ -172,10 +172,15 @@ export function setConvMember(
 ): void {
   ensureConvMeta(conv);
   setState('convMeta', conv, 'member', member);
-  if (defaults?.client) setState('convMeta', conv, 'client', defaults.client);
-  if (defaults?.provider) setState('convMeta', conv, 'provider', defaults.provider);
-  if (defaults?.model) setState('convMeta', conv, 'model', defaults.model);
-  if (defaults?.effort) setState('convMeta', conv, 'effort', defaults.effort);
+  // Engine dials compare against `undefined`, not truthiness: the empty model
+  // id is a REAL value ("Default (CLI config)", the first row of the codex /
+  // gemini / muse catalogs), and dropping it left the previous member's
+  // Anthropic id on a Codex-bound conv. `title` keeps the truthy check — an
+  // empty title must never wipe one the operator typed.
+  if (defaults?.client !== undefined) setState('convMeta', conv, 'client', defaults.client);
+  if (defaults?.provider !== undefined) setState('convMeta', conv, 'provider', defaults.provider);
+  if (defaults?.model !== undefined) setState('convMeta', conv, 'model', defaults.model);
+  if (defaults?.effort !== undefined) setState('convMeta', conv, 'effort', defaults.effort);
   if (defaults?.title) setState('convMeta', conv, 'title', defaults.title);
   saveConvMeta();
 }

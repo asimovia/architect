@@ -58,6 +58,15 @@ function override(value: string | null | undefined, follow: string): string {
  * daemon, where moving a member back to Anthropic must overwrite a stale
  * non-Anthropic value in the sidecar rather than leave it.
  */
+/** The "no override" model sentinel depends on the client: claude-code
+ *  offers an explicit `auto` entry, every other driver (codex / gemini /
+ *  muse) uses the empty id — "Default (CLI config)", the first row of its
+ *  daemon catalog. Defaulting a codeless member to `auto` under Codex is
+ *  how an Anthropic id ended up displayed on a non-Anthropic engine. */
+function defaultModelFor(client: string): string {
+  return client === 'claude-code' ? 'auto' : '';
+}
+
 export function resolveDisplayEngine(
   meta: ShadowConvMeta | undefined,
   snap: ShadowSnap | null | undefined,
@@ -69,23 +78,25 @@ export function resolveDisplayEngine(
   const snapProvider = (snap?.provider ?? '').trim().toLowerCase();
   const memberProvider = (member?.provider ?? '').trim().toLowerCase();
   if (meta?.member && member) {
+    const client =
+      (member.client ?? '').trim()
+      || (meta?.client ?? '').trim()
+      || (snap?.client ?? '').trim()
+      || 'claude-code';
     return {
-      model: pinnedModel || (member.model ?? '').trim() || 'auto',
+      model: pinnedModel || (member.model ?? '').trim() || defaultModelFor(client),
       effort: pinnedEffort || (member.effort ?? '').trim() || 'default',
-      client:
-        (member.client ?? '').trim()
-        || (meta?.client ?? '').trim()
-        || (snap?.client ?? '').trim()
-        || 'claude-code',
+      client,
       provider: pinnedProvider || memberProvider || snapProvider || 'anthropic',
     };
   }
   // Unbound conv (or a member the roster hasn't hydrated yet): the daemon
   // snapshot is the best truth available.
+  const fallbackClient = (meta?.client ?? '').trim() || (snap?.client ?? '').trim() || 'claude-code';
   return {
-    model: pinnedModel || (snap?.model ?? '').trim() || 'auto',
+    model: pinnedModel || (snap?.model ?? '').trim() || defaultModelFor(fallbackClient),
     effort: pinnedEffort || (snap?.effort ?? '').trim() || 'default',
-    client: (meta?.client ?? '').trim() || (snap?.client ?? '').trim() || 'claude-code',
+    client: fallbackClient,
     provider: pinnedProvider || snapProvider || 'anthropic',
   };
 }

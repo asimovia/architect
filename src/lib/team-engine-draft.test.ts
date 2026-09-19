@@ -37,3 +37,21 @@ test('whitespace and empty strings count as unpinned, not as edits', () => {
   const saved = { client: '  ', provider: '', model: '', effort: '' };
   assert.equal(isEngineDirty(saved, engineFromSaved(saved)), false);
 });
+
+test('a non-claude member with no model pinned seeds the CLI default, not sonnet', () => {
+  // ATM17 follow-up: `sonnet` is an Anthropic id — seeding it under Codex is
+  // how a cross-client model got saved onto the wrong CLI.
+  for (const client of ['codex', 'gemini', 'muse']) {
+    const draft = engineFromSaved({ client, model: '' });
+    assert.equal(draft.model, '', `client ${client}`);
+    assert.equal(isEngineDirty({ client, model: '' }, draft), false);
+  }
+});
+
+test('a claude-code member with no model pinned keeps the historic sonnet default', () => {
+  assert.equal(engineFromSaved({ client: 'claude-code', model: '' }).model, 'sonnet');
+});
+
+test('an explicitly pinned model survives regardless of client', () => {
+  assert.equal(engineFromSaved({ client: 'codex', model: 'gpt-5' }).model, 'gpt-5');
+});

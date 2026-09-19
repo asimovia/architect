@@ -36,10 +36,16 @@ export interface EngineSaved {
  * what "empty" means or a member with no engine pinned reads dirty on open.
  */
 export function engineFromSaved(m: EngineSaved | undefined): EngineDraft {
+  const client = (m?.client || '').trim() || 'claude-code';
+  const rawModel = (m?.model || '').trim();
+  // The empty-model default is client-aware: claude-code keeps its historic
+  // `sonnet`, every other driver uses the empty id — "Default (CLI config)",
+  // the first row of its daemon catalog. Seeding `sonnet` under Codex is how
+  // an Anthropic id got saved onto the wrong CLI.
   return {
-    client: (m?.client || '').trim() || 'claude-code',
+    client,
     provider: (m?.provider || '').trim() || DEFAULT_PROVIDER,
-    model: (m?.model || '').trim() || 'sonnet',
+    model: rawModel || (client === 'claude-code' ? 'sonnet' : ''),
     effort: (m?.effort || '').trim() || 'default',
   };
 }
