@@ -18,6 +18,7 @@ import { teamStore } from '~/state/team';
 import { clientsStore } from '~/state/clients';
 import { DEFAULT_PROVIDER } from '~/lib/models';
 import type { EngineChoice } from '~/components/team/ClientModelEffortPicker';
+import { engineFromSaved, isEngineDirty } from '~/lib/team-engine-draft';
 import { ModelSection } from '~/components/team/detail/ModelSection';
 import { PromptSection } from '~/components/team/detail/PromptSection';
 import { RefsSection } from '~/components/team/detail/RefsSection';
@@ -51,6 +52,13 @@ export default function MemberDetailPanel(props: { memberId: string; onClose: ()
 
   const [savingSection, setSavingSection] = createSignal<string | null>(null);
   const [error, setError] = createSignal<string | null>(null);
+  // ATM16 — which member the engine draft was seeded from. A background
+  // roster refresh must not silently discard an unsaved draft.
+  const [engineSeededFor, setEngineSeededFor] = createSignal<string | null>(null);
+  // ATM16 — the draft left the browser only via the section Save. While it
+  // differs from the saved card, open headers (correctly) keep showing the
+  // saved engine — the badge says so instead of looking like a sync bug.
+  const engineDirty = (): boolean => isEngineDirty(member() ?? undefined, engine());
 
   // Capture the on-disk `updated:` at mount; warn if it moves (another
   // cockpit tab edited the same member) — ATM6 concurrent-edit warning.
@@ -73,17 +81,20 @@ export default function MemberDetailPanel(props: { memberId: string; onClose: ()
   });
 
   // Seed working copies once the frontmatter + body are available.
+  // ATM16 — the engine draft is re-seeded only into a clean draft (or for a
+  // different member): a background re-hydrate while the operator is picking
+  // a model must not silently eat the pick. Refs/prompt keep the old
+  // always-reseed behaviour (separate sections, separate concern).
   createEffect(() => {
     const m = member();
-    if (m) {
-      setEngine({
-        client: m.client || 'claude-code',
-        provider: m.provider || DEFAULT_PROVIDER,
-        model: m.model || 'sonnet',
-        effort: m.effort || 'default',
-      });
-      setRefs(Array.isArray(m.refs) ? [...m.refs] : []);
+    if (m && (engineSeededFor() !== props.memberId || !engineDirty())) {
+      setEngine(engineFromSaved(m));
+      setEngineSeededFor(props.memberId);
     }
+  });
+  createEffect(() => {
+    const m = member();
+    if (m) setRefs(Array.isArray(m.refs) ? [...m.refs] : []);
     const d = detail();
     if (d) setPrompt(d.body ?? '');
   });
@@ -163,6 +174,7 @@ export default function MemberDetailPanel(props: { memberId: string; onClose: ()
             value={engine()}
             onChange={setEngine}
             saving={savingSection() === 'model'}
+            dirty={engineDirty()}
             onSave={(body) => { void saveSection('model', body); }}
           />
 
