@@ -45,7 +45,7 @@ type CfgState =
   | { status: 'error'; message: string }
   | { status: 'ok'; data: ProvidersConfigResponse };
 
-export function ClientsBlock() {
+export function ClientsBlock(props: { active?: boolean } = {}) {
   const client = () => daemonStore.state.client;
 
   // 2026-07-09 fix — this block now mounts at APP BOOT (GeneralConfigDrawer
@@ -87,8 +87,14 @@ export function ClientsBlock() {
     setCfg({ status: 'error', message: `HTTP ${r.status}` });
   };
 
+  // DM-CLI-15 — `active` gates on visibility: the General settings drawer
+  // is always in the DOM (close animation), so a mount-only fetch goes
+  // stale the moment a CLI is installed while the cockpit is up. Passing
+  // `active={drawerOpen}` re-probes `GET /config/providers` + `GET
+  // /clients` on every open — on demand, no polling, no browser refresh.
   createEffect(() => {
     client(); // establishes the dependency — reruns on attach/project-switch
+    if (props.active === false) return; // drawer closed — skip; open reruns us
     void refetch();
   });
 
@@ -103,6 +109,63 @@ export function ClientsBlock() {
     if (!id) return null;
     return okData()?.providers.find((x) => x.id === id)?.label ?? id;
   };
+  // DM-CLI-15 — one vendor, one card. `meta` (API provider) + `muse`
+  // (CLI client) share one key + one switch: merge them into a single
+  // card, but ONLY when the daemon explicitly links both directions
+  // (py-1.35.14+, sharesKeyWith). Older daemons keep the legacy layout
+  // (install box + two rows) via the !mergedPair() fallbacks below.
+  const metaRow = (): ProviderConfigInfo | null =>
+    okData()?.providers.find((x) => x.id === 'meta') ?? null;
+  const museRow = (): ProviderConfigInfo | null =>
+    okData()?.providers.find((x) => x.id === 'muse') ?? null;
+  const mergedPair = (): boolean => {
+    const a = metaRow(), b = museRow();
+    return !!a && !!b && a.sharesKeyWith === 'muse' && b.sharesKeyWith === 'meta';
+  };
+  const singleRows = (): ProviderConfigInfo[] =>
+    (okData()?.providers ?? []).filter(
+      (p) => !mergedPair() || (p.id !== 'meta' && p.id !== 'muse'),
+    );
+  const museClient = () =>
+    clientsStore.state.list.find((c) => c.id === 'muse') ?? null;
+  const metaMuseKeyPresent = (): boolean =>
+    !!(metaRow()?.keyPresent || museRow()?.keyPresent);
+  const metaMuseEnabled = (): boolean =>
+    (metaRow()?.enabled ?? true) && (museRow()?.enabled ?? true);
+  // The API lane works with a stored key; the CLI lane works with an
+  // installed binary that isn't explicitly unauthenticated (null means
+  // "can't tell", not "no").
+  const metaMuseLaneUp = (): boolean => {
+    if (metaMuseKeyPresent()) return true;
+    const m = museClient();
+    return !!m && m.installed && m.authConfigured !== false;
+  };
+  const metaMuseAvailable = (): boolean => metaMuseEnabled() && metaMuseLaneUp();
+  const cliStatus = (): string => {
+    const m = museClient();
+    if (!m) return 'CLI status unknown — press Refresh below.';
+    if (!m.installed) return 'CLI not installed on daemon host.';
+    if (m.authConfigured === true) return 'CLI installed on daemon host, login configured.';
+    if (m.authConfigured === false)
+      return 'CLI installed on daemon host — login required.';
+    return 'CLI installed on daemon host.';
+  };
+  // One switch drives both slots (the daemon mirrors them too, so either
+  // order of daemon works); the key is stored once under `muse`, which
+  // the daemon's alias fallback also serves to `meta`.
+  const toggleMetaMuse = (enabled: boolean) =>
+    void apply(`toggle:meta-muse`, {
+      providers: { meta: { enabled }, muse: { enabled } },
+    });
+  const saveMetaMuse = () => {
+    const key = (draft().muse ?? '').trim();
+    if (!key) return;
+    void apply('save:muse', { providers: { muse: { key } } });
+  };
+  const clearMetaMuse = () =>
+    void apply('clear:muse-meta', {
+      providers: { muse: { clear_key: true }, meta: { clear_key: true } },
+    });
   const errorMessage = (): string => {
     const c = cfg();
     return c.status === 'error' ? c.message : '';
@@ -162,7 +225,10 @@ export function ClientsBlock() {
         convenience for headless agents.
       </div>
 
-      <Show when={clientsStore.state.list.some((c) => c.id === 'muse')}>
+      {/* DM-CLI-15 — legacy install box: only on daemons too old to link
+          the two Meta slots (no merged card). New daemons render the
+          single "Muse (Meta)" card inside the provider list instead. */}
+      <Show when={!mergedPair() && clientsStore.state.list.some((c) => c.id === 'muse')}>
         <div class="rounded-md border border-gray-700/50 p-3 text-[12px] text-gray-300 space-y-2 mb-3">
           <p><b>Muse Code (Meta)</b> — run these commands on the daemon's machine:</p>
           <pre class="overflow-x-auto text-[11px]">curl -fsSL https://dev.meta.ai/install.sh | bash</pre>
@@ -206,7 +272,89 @@ export function ClientsBlock() {
         }
       >
         <div class="space-y-4">
-          <For each={okData()!.providers}>
+          {/* DM-CLI-15 — ONE card per vendor: Meta's API lane + the Muse
+              CLI lane share one key + one switch, so they render as one
+              "Muse (Meta)" card (install status, key field, docs, refresh)
+              instead of two rows + the legacy top box. */}
+          <Show when={mergedPair()}>
+            <div class="rounded-lg border border-gray-800/60 p-4 space-y-3">
+              <div class="flex items-center justify-between gap-2 pb-2.5 border-b border-gray-800/60">
+                <div class="flex items-center gap-2">
+                  <span class="font-mono text-[13px] text-gray-100">Muse (Meta)</span>
+                  <Show when={metaMuseAvailable()}>
+                    <span class="font-mono text-[9px] uppercase tracking-wider text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded px-1.5 py-0.5">available</span>
+                  </Show>
+                  <Show when={!metaMuseAvailable()}>
+                    <span class="font-mono text-[9px] uppercase tracking-wider text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded px-1.5 py-0.5">unavailable</span>
+                  </Show>
+                </div>
+                <Toggle
+                  checked={metaMuseEnabled()}
+                  onChange={toggleMetaMuse}
+                  disabled={busy() === 'toggle:meta-muse'}
+                  label="Enable Muse (Meta)"
+                />
+              </div>
+
+              <p class="text-[11px] text-gray-500 leading-snug">
+                One vendor, two lanes — the local CLI or the API. One key +
+                one switch serve both: set the key once below and either
+                lane works.
+              </p>
+
+              <div class="rounded-md border border-gray-700/50 p-3 text-[12px] text-gray-300 space-y-2">
+                <p><b>CLI lane</b> — {cliStatus()}</p>
+                <Show when={!museClient()?.installed}>
+                  <p>Install the Muse CLI on the daemon host (that machine, not this browser):</p>
+                  <pre class="overflow-x-auto text-[11px]">curl -fsSL https://dev.meta.ai/install.sh | bash</pre>
+                  <pre class="overflow-x-auto text-[11px]">muse login</pre>
+                  <p>Then press Refresh below — no browser reload needed.</p>
+                </Show>
+                <Show when={museClient()?.installed && museClient()?.authConfigured === false}>
+                  <p>Run <span class="font-mono">muse login</span> on the daemon host, then press Refresh below.</p>
+                </Show>
+                <p>Contributor models may use your content to improve Meta products. The CLI default currently selects Muse Spark 1.3 Contributor; choose a named model in the team editor to override it.</p>
+                <p><button type="button" onClick={() => void refetch()} class="text-emerald-300 hover:text-white underline">Refresh installation and login status</button></p>
+                <p><a href="https://dev.meta.ai/docs/muse-code" target="_blank" rel="noopener noreferrer" class="underline">Meta setup documentation</a></p>
+              </div>
+
+              <div class="space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <span class="font-mono text-[10px] uppercase tracking-wider text-gray-500">API key <span class="normal-case tracking-normal">· API lane</span></span>
+                  <span class="text-[10px]" classList={{ 'text-emerald-400': metaMuseKeyPresent(), 'text-amber-400': !metaMuseKeyPresent() }}>
+                    {metaMuseKeyPresent() ? 'key set ✓' : 'no key'}
+                  </span>
+                </div>
+                <div class="flex gap-1.5">
+                  <input
+                    type="password"
+                    value={draft().muse ?? (metaMuseKeyPresent() ? MASKED_KEY : '')}
+                    readOnly={metaMuseKeyPresent() && draft().muse === undefined}
+                    onInput={(e) => patchKeyDraft('muse', e.currentTarget.value)}
+                    placeholder="paste the Meta API key"
+                    title={metaMuseKeyPresent() ? 'A key is already set — click Clear to replace it' : undefined}
+                    class="flex-1 min-w-0 bg-[#020617] border border-gray-700/40 rounded px-2.5 py-1.5 text-[12px] font-mono text-gray-100 focus:outline-none focus:border-emerald-500/55"
+                  />
+                  <button
+                    type="button"
+                    onClick={saveMetaMuse}
+                    disabled={busy() !== null || !(draft().muse ?? '').trim()}
+                    class="flex-shrink-0 text-[11px] font-mono uppercase tracking-wider text-emerald-300 hover:text-emerald-200 border border-emerald-500/30 hover:border-emerald-500/60 rounded px-3 py-1.5 disabled:opacity-50"
+                  >{busy() === 'save:muse' ? 'Saving…' : 'Save'}</button>
+                  <Show when={metaMuseKeyPresent()}>
+                    <button
+                      type="button"
+                      onClick={clearMetaMuse}
+                      disabled={busy() !== null}
+                      class="flex-shrink-0 text-[11px] font-mono text-red-300 border border-red-500/30 hover:bg-red-500/10 rounded px-2 py-1.5 disabled:opacity-50"
+                      title="Delete the stored key"
+                    >Clear</button>
+                  </Show>
+                </div>
+              </div>
+            </div>
+          </Show>
+          <For each={singleRows()}>
             {(p) => (
               <div class="rounded-lg border border-gray-800/60 p-4 space-y-3">
                 {/* Title row — clearly delimited from the fields below. */}

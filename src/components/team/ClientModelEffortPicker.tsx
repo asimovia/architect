@@ -20,8 +20,9 @@
  * Provider is claude-code-only — the other CLIs bring their own auth.
  */
 
-import { For, Show, createMemo } from 'solid-js';
+import { For, Show, createMemo, onMount } from 'solid-js';
 import { clientsStore } from '~/state/clients';
+import { daemonStore } from '~/state/daemon';
 import { EFFORT_CATALOG, DEFAULT_PROVIDER, providerCatalog } from '~/lib/models';
 
 const SELECT_CLASS =
@@ -52,6 +53,15 @@ export function ClientModelEffortPicker(props: {
    *  the detail panel's section header already names them). */
   labels?: boolean;
 }) {
+  // DM-CLI-15 — re-probe on every editor open: a CLI installed while the
+  // cockpit is up stays "not installed" until something refetches, and a
+  // full browser refresh was the only recourse. The picker mounts fresh
+  // with each editor, so one cheap GET /clients here keeps every dropdown
+  // honest — on demand, no polling.
+  onMount(() => {
+    const c = daemonStore.state.client;
+    if (c) void clientsStore.hydrate(c);
+  });
   const isClaude = (): boolean => props.value.client === 'claude-code';
   const catalog = createMemo(() => clientsStore.catalogFor(props.value.client));
   const providerOptions = createMemo(() => clientsStore.providersFor('claude-code'));

@@ -74,7 +74,7 @@ export default function GeneralConfigDrawer(props: { open: boolean; onClose: () 
             >✕</button>
           </header>
           <div class="flex-1 min-h-0 overflow-y-auto px-4 py-4">
-            <GeneralConfigPanel />
+            <GeneralConfigPanel open={props.open} />
           </div>
         </aside>
       </div>

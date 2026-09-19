@@ -17,7 +17,9 @@
 
 import { DaemonBlock, RemoteControlBlock, ClientsBlock } from '~/components/zones/config/blocks';
 
-export default function GeneralConfigPanel() {
+// DM-CLI-15 — `open` flows into ClientsBlock `active` so every drawer open
+// re-probes the daemon (fresh install/login status, no browser refresh).
+export default function GeneralConfigPanel(props: { open?: boolean } = {}) {
   return (
     <div class="min-w-0">
       <p class="text-[12px] text-gray-500 leading-relaxed mb-4">
@@ -27,7 +29,7 @@ export default function GeneralConfigPanel() {
       </p>
       <DaemonBlock />
       <RemoteControlBlock />
-      <ClientsBlock />
+      <ClientsBlock active={props.open ?? true} />
     </div>
   );
 }
