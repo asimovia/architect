@@ -161,15 +161,19 @@ export function setConvEffort(conv: string, effort: string): void {
 }
 
 /** agent-team (ATM7) — rebind a DRAFT conv (no messages yet) to another
- *  roster member, refreshing model/effort defaults and the title when it
- *  still matches the previous member's name. */
+ *  roster member, refreshing the full engine (client/provider/model/effort)
+ *  and the title when it still matches the previous member's name. The
+ *  whole engine travels: rebinding to a Codex member must flip the header's
+ *  client badge and model catalog too, not just model/effort. */
 export function setConvMember(
   conv: string,
   member: string,
-  defaults?: { model?: string; effort?: string; title?: string },
+  defaults?: { client?: string; provider?: string; model?: string; effort?: string; title?: string },
 ): void {
   ensureConvMeta(conv);
   setState('convMeta', conv, 'member', member);
+  if (defaults?.client) setState('convMeta', conv, 'client', defaults.client);
+  if (defaults?.provider) setState('convMeta', conv, 'provider', defaults.provider);
   if (defaults?.model) setState('convMeta', conv, 'model', defaults.model);
   if (defaults?.effort) setState('convMeta', conv, 'effort', defaults.effort);
   if (defaults?.title) setState('convMeta', conv, 'title', defaults.title);

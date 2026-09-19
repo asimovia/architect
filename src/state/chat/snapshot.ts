@@ -53,6 +53,7 @@ function seedOrHealMeta(c: ChatConvSummary): void {
       agentId,
       model: 'auto',
       client: c.client ?? undefined,
+      provider: c.provider ?? undefined,
       member: c.member ?? undefined,
       type: (c.agent_type ?? 'custom') as ConvMeta['type'],
       title: agentId || c.conv,
@@ -62,6 +63,8 @@ function seedOrHealMeta(c: ChatConvSummary): void {
   }
   if (c.agent_id && !existing.agentId) setState('convMeta', c.conv, 'agentId', c.agent_id);
   if (c.member && !existing.member) setState('convMeta', c.conv, 'member', c.member);
+  if (c.client && !existing.client) setState('convMeta', c.conv, 'client', c.client);
+  if (c.provider && !existing.provider) setState('convMeta', c.conv, 'provider', c.provider);
   // CN10 — heal stale localStorage entries saved with an empty title: without
   // this the rail (title → conv) and the header rendered different fallbacks
   // for the same conv. Seed default matches fresh-meta creation above.

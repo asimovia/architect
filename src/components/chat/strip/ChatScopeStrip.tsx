@@ -70,6 +70,7 @@ export default function ChatScopeStrip(props: Props) {
   const modelId = (): string => engine().model;
   const effortId = (): string => engine().effort;
   const clientId = (): string => engine().client;
+  const providerId = (): string => engine().provider;
 
   // ATM12 follow-up (2026-07-07 operator correction) — the fixed-agent
   // explainer sits under THIS agent's own name row, shown only while that
@@ -93,9 +94,14 @@ export default function ChatScopeStrip(props: Props) {
     const msgs = chatStore.state.convMap[props.conv] ?? [];
     return !msgs.some((m) => m.kind === 'user' || m.kind === 'assistant');
   };
+  // Rebinding a draft carries the new member's FULL engine: client and
+  // provider travel with model/effort, so the header's client badge and
+  // model catalog flip to the new member in the same paint.
   const rebindMember = (id: string): void => {
     const m = teamStore.get(id);
     chatStore.setConvMember(props.conv, id, {
+      client: m?.client,
+      provider: m?.provider,
       model: m?.model,
       effort: m?.effort,
       // Only rename when the title still matches the previous member's
@@ -172,6 +178,7 @@ export default function ChatScopeStrip(props: Props) {
             model={modelId()}
             effort={effortId()}
             client={clientId()}
+            provider={providerId()}
           />
           <Show when={snap()?.usage}>
             {(usage) => <UsageChip usage={usage()} />}

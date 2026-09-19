@@ -11,13 +11,17 @@
  * DM-CLI-08 (multi-cli-clients) — the catalogs follow the CLI this conv
  * actually runs on, not always claude-code's. The client itself is set
  * on the roster member, not per-turn, so it is read-only here.
+ * ATM17 — claude-code models follow the conv's PROVIDER (Anthropic /
+ * Meta / ZAI), the same catalog the member editor offers: a Muse member
+ * shows Muse models in the header, not Anthropic ones with the truth
+ * hiding in a "(member)" fallback row.
  */
 
 import { For, Show } from 'solid-js';
 import { chatStore } from '~/state/chat';
 import { clientsStore } from '~/state/clients';
 import { withLiveOption } from '~/lib/member-shadow';
-import { MODEL_CATALOG, EFFORT_CATALOG } from '~/lib/models';
+import { EFFORT_CATALOG, providerCatalog } from '~/lib/models';
 
 const SELECT_MODEL =
   'bg-purple-500/10 border border-purple-500/30 rounded px-1.5 py-0.5 text-[10px] font-mono '
@@ -31,9 +35,17 @@ export default function ModelEffortPickers(props: {
   model: string;
   effort: string;
   client: string;
+  provider: string;
 }) {
   const isClaudeCode = (): boolean => props.client === 'claude-code';
   const catalog = () => clientsStore.catalogFor(props.client);
+  // claude-code models come from the conv's PROVIDER catalog (Anthropic /
+  // Meta / ZAI) — the same source the member editor uses — never from a
+  // hardcoded Anthropic-only list. Other clients use the daemon's live
+  // /clients catalog for that client (possibly still empty → the live
+  // value below keeps the combo honest instead of showing Claude models).
+  const claudeModels = () => providerCatalog(props.provider);
+  const claudeGroups = () => [...new Set(claudeModels().map((m) => m.group))];
   // ATM14f — the combos always offer the LIVE value, even when the
   // catalog hasn't caught up (not yet hydrated, unknown client, new
   // model id): without a matching <option> the select would render the
@@ -44,7 +56,7 @@ export default function ModelEffortPickers(props: {
       (isClaudeCode() ? EFFORT_CATALOG : catalog().efforts).map((e) => ({ id: e.id, label: e.label })),
       props.effort,
     );
-  const claudeModelKnown = (): boolean => MODEL_CATALOG.some((m) => m.id === props.model);
+  const claudeModelKnown = (): boolean => claudeModels().some((m) => m.id === props.model);
   return (
     <div class="flex items-center gap-1 flex-shrink-0">
       <Show
@@ -63,12 +75,12 @@ export default function ModelEffortPickers(props: {
         <select
           value={props.model}
           onChange={(e) => chatStore.setConvModel(props.conv, e.currentTarget.value)}
-          title="Model — applies from the next turn (daemon launches claude-code --model)"
+          title={`Model — applies from the next turn (${props.provider})`}
           class={SELECT_MODEL}
         >
-          <For each={['Latest (alias)', 'Pinned version', 'Auto'] as const}>{(grp) => (
+          <For each={claudeGroups()}>{(grp) => (
             <optgroup label={grp}>
-              <For each={MODEL_CATALOG.filter((m) => m.group === grp)}>
+              <For each={claudeModels().filter((m) => m.group === grp)}>
                 {(m) => <option value={m.id}>{m.label}</option>}
               </For>
             </optgroup>

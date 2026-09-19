@@ -86,13 +86,17 @@ const DEFAULT_CATALOG: Catalog = {
  *  local hardcoded catalog (richer metadata, zero risk of drifting
  *  from what NewMemberDialog/ChatScopeStrip already render for the
  *  overwhelmingly common case) — every OTHER client sources from the
- *  daemon's live /clients response, falling back to the same default
- *  catalog if the daemon hasn't answered yet or doesn't know this id. */
+ *  daemon's live /clients response. An unknown client (daemon too old,
+ *  not yet hydrated, unknown id) returns EMPTY lists, never the Claude
+ *  fallback: showing Claude models under a Codex member is how a wrong
+ *  model id got saved onto the wrong CLI. Callers render the live value
+ *  as its own trailing option (member-shadow `withLiveOption`) so the
+ *  combo still displays the truth while the catalog is missing. */
 function catalogFor(clientId: string | null | undefined): Catalog {
   const id = (clientId || 'claude-code').toLowerCase();
   if (id === 'claude-code') return DEFAULT_CATALOG;
   const hit = state.list.find((c) => c.id === id);
-  return hit ? { models: hit.models, efforts: hit.efforts } : DEFAULT_CATALOG;
+  return hit ? { models: hit.models, efforts: hit.efforts } : { models: [], efforts: [] };
 }
 
 /** The selectable client list for a picker dropdown. Always leads with

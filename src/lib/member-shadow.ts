@@ -21,6 +21,7 @@ export interface ShadowConvMeta {
   model?: string;
   effort?: string;
   client?: string;
+  provider?: string;
 }
 
 /** Live roster values for one member (subset of TeamMember frontmatter). */
@@ -28,6 +29,7 @@ export interface ShadowMemberFile {
   model?: string;
   effort?: string;
   client?: string;
+  provider?: string;
 }
 
 /** Daemon-side snapshot values for one conv (subset of the conv snapshot —
@@ -36,6 +38,7 @@ export interface ShadowSnap {
   model?: string | null;
   effort?: string | null;
   client?: string | null;
+  provider?: string | null;
 }
 
 /** 'auto' / 'default' / empty all mean "no override — follow the member". */
@@ -50,15 +53,21 @@ function override(value: string | null | undefined, follow: string): string {
  * Resolution order matches `teamsvc._member_dispatch_prep` exactly, which is
  * the point — a header that disagrees with the daemon is how ATM14 stayed open
  * for four rounds: conv override → member card → daemon snapshot → default.
- * `client` has no per-conv picker, so it reads member-first.
+ * `client`/`provider` have no per-conv picker, so they read member-first.
+ * Provider defaults to the concrete 'anthropic' (never ''): it mirrors the
+ * daemon, where moving a member back to Anthropic must overwrite a stale
+ * non-Anthropic value in the sidecar rather than leave it.
  */
 export function resolveDisplayEngine(
   meta: ShadowConvMeta | undefined,
   snap: ShadowSnap | null | undefined,
   member: ShadowMemberFile | undefined,
-): { model: string; effort: string; client: string } {
+): { model: string; effort: string; client: string; provider: string } {
   const pinnedModel = override(meta?.model, 'auto');
   const pinnedEffort = override(meta?.effort, 'default');
+  const pinnedProvider = (meta?.provider ?? '').trim().toLowerCase();
+  const snapProvider = (snap?.provider ?? '').trim().toLowerCase();
+  const memberProvider = (member?.provider ?? '').trim().toLowerCase();
   if (meta?.member && member) {
     return {
       model: pinnedModel || (member.model ?? '').trim() || 'auto',
@@ -68,6 +77,7 @@ export function resolveDisplayEngine(
         || (meta?.client ?? '').trim()
         || (snap?.client ?? '').trim()
         || 'claude-code',
+      provider: pinnedProvider || memberProvider || snapProvider || 'anthropic',
     };
   }
   // Unbound conv (or a member the roster hasn't hydrated yet): the daemon
@@ -76,6 +86,7 @@ export function resolveDisplayEngine(
     model: pinnedModel || (snap?.model ?? '').trim() || 'auto',
     effort: pinnedEffort || (snap?.effort ?? '').trim() || 'default',
     client: (meta?.client ?? '').trim() || (snap?.client ?? '').trim() || 'claude-code',
+    provider: pinnedProvider || snapProvider || 'anthropic',
   };
 }
 

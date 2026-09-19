@@ -4,7 +4,7 @@
 // dependency-free leaf for this to run at all (no `~/` alias, no logger).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MODEL_CATALOG, GLM_CATALOG, modelShort, modelLabel, providerCatalog } from './models.ts';
+import { MODEL_CATALOG, GLM_CATALOG, MUSE_CATALOG, modelShort, modelLabel, providerCatalog } from './models.ts';
 
 test('the Anthropic flagship is selectable and mirrors the daemon catalog', () => {
   const ids = MODEL_CATALOG.map((m) => m.id);
@@ -55,4 +55,12 @@ test('opus/sonnet/glm badges are untouched by the Fable fix', () => {
 test('provider catalogs stay separate', () => {
   assert.ok(providerCatalog('zai').every((m) => m.id.startsWith('glm')));
   assert.ok(providerCatalog('anthropic').some((m) => m.id === 'claude-fable-5-1'));
+  assert.ok(providerCatalog('meta').every((m) => m.id.startsWith('muse-spark')));
+});
+
+test('Muse ids resolve to labels and short badges (ATM17)', () => {
+  assert.ok(MUSE_CATALOG.some((m) => m.id === 'muse-spark-1.3-contributor'));
+  assert.equal(modelLabel('muse-spark-1.3-contributor'), 'Muse Spark 1.3 Contributor');
+  assert.equal(modelShort('muse-spark-1.3-contributor'), 'muse1.3c');
+  assert.equal(modelShort('muse-spark-2.0'), 'muse2.0');
 });

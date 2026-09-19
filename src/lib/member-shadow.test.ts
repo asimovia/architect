@@ -19,6 +19,7 @@ test('a bound conv with no override shows the member card', () => {
     model: 'muse-spark-1.3-contributor',
     effort: 'default',
     client: 'muse',
+    provider: 'anthropic',
   });
 });
 
@@ -63,13 +64,31 @@ test('client always follows the card — there is no per-conv client picker', ()
   assert.equal(e.client, 'muse');
 });
 
+test('provider follows member → sidecar → snapshot → anthropic', () => {
+  const meta = { member: 'm', provider: 'zai' };
+  assert.equal(
+    resolveDisplayEngine(meta, null, { ...MEMBER, provider: 'meta' }).provider,
+    'zai',
+  );
+  assert.equal(
+    resolveDisplayEngine({ member: 'm' }, null, { ...MEMBER, provider: 'meta' }).provider,
+    'meta',
+  );
+  assert.equal(
+    resolveDisplayEngine({ member: 'm' }, { provider: 'zai' }, MEMBER).provider,
+    'zai',
+  );
+  assert.equal(resolveDisplayEngine({ member: 'm' }, null, MEMBER).provider, 'anthropic');
+});
+
 test('an unbound conv falls back to the daemon snapshot, then the default', () => {
   const e = resolveDisplayEngine({}, { model: 'sonnet', client: 'codex' }, undefined);
-  assert.deepEqual(e, { model: 'sonnet', effort: 'default', client: 'codex' });
+  assert.deepEqual(e, { model: 'sonnet', effort: 'default', client: 'codex', provider: 'anthropic' });
   assert.deepEqual(resolveDisplayEngine(undefined, null, undefined), {
     model: 'auto',
     effort: 'default',
     client: 'claude-code',
+    provider: 'anthropic',
   });
 });
 

@@ -23,6 +23,7 @@
 import { For, Show, createMemo, onMount } from 'solid-js';
 import { clientsStore } from '~/state/clients';
 import { daemonStore } from '~/state/daemon';
+import { withLiveOption } from '~/lib/member-shadow';
 import { EFFORT_CATALOG, DEFAULT_PROVIDER, providerCatalog } from '~/lib/models';
 
 const SELECT_CLASS =
@@ -68,12 +69,25 @@ export function ClientModelEffortPicker(props: {
   const providerModels = createMemo(() => providerCatalog(props.value.provider));
   const modelGroups = createMemo(() => [...new Set(providerModels().map((m) => m.group))]);
   const efforts = createMemo(() => (isClaude() ? EFFORT_CATALOG : catalog().efforts));
+  // Empty daemon catalog (not yet hydrated): still show the live value so
+  // the selected effort never renders as nothing.
+  const liveEfforts = createMemo(() =>
+    withLiveOption(efforts().map((e) => ({ id: e.id, label: e.label })), props.value.effort),
+  );
 
+  // The three combos are one chained array driven by a single source:
+  // client → that client's own model/effort catalog (daemon live, except
+  // claude-code which pairs client + provider → provider catalog). A
+  // client switch always re-seeds model+effort from the NEW client's
+  // catalog, so a leftover id from the old CLI is never submitted for
+  // the new one; an empty catalog (daemon not yet hydrated) seeds '' /
+  // 'default' — "CLI default" — never another client's model.
   const onClientChange = (id: string): void => {
     const cat = clientsStore.catalogFor(id);
     props.onChange({
       ...props.value,
       client: id,
+      provider: id === 'claude-code' ? props.value.provider : DEFAULT_PROVIDER,
       model: cat.models[0]?.id ?? '',
       effort: cat.efforts[0]?.id ?? 'default',
     });
@@ -157,7 +171,12 @@ export function ClientModelEffortPicker(props: {
               class={SELECT_CLASS}
               aria-label="Model"
             >
-              <For each={catalog().models}>{(m) => <option value={m.id}>{m.label}</option>}</For>
+              <Show
+                when={catalog().models.length > 0}
+                fallback={<option value={props.value.model}>{props.value.model ? `${props.value.model} (member)` : 'Loading catalog…'}</option>}
+              >
+                <For each={withLiveOption(catalog().models, props.value.model)}>{(m) => <option value={m.id}>{m.label}</option>}</For>
+              </Show>
             </select>
           }
         >
@@ -185,7 +204,7 @@ export function ClientModelEffortPicker(props: {
           </label>
         </Show>
         <div class="flex flex-wrap gap-1">
-          <For each={efforts()}>
+          <For each={liveEfforts()}>
             {(e) => (
               <button
                 type="button"

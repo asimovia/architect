@@ -33,6 +33,11 @@ export interface ConvMeta {
   /** DM-CLI-02 (multi-cli-clients) — which CLI dispatches this conv's
    *  turns. undefined/'claude-code' = the default. */
   client?: string;
+  /** MPV1 — the LLM backend for claude-code turns, mirrored from the
+   *  daemon sidecar (member save stamps it, `conv.meta_updated` carries
+   *  it). Display-only: the header needs it to pick the right model
+   *  catalog; dispatches resolve provider daemon-side from the member. */
+  provider?: string;
   type: AgentType;
   title: string;
   /** agent-team (ATM7/ATM10) — the roster member this conv is bound to

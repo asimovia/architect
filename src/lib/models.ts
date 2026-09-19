@@ -151,7 +151,7 @@ export const EFFORT_CATALOG: readonly EffortMeta[] = [
 export const DEFAULT_MODEL = 'opus';
 export const DEFAULT_EFFORT = 'default';
 
-const MODEL_BY_ID = new Map([...MODEL_CATALOG, ...GLM_CATALOG].map((m) => [m.id, m]));
+const MODEL_BY_ID = new Map([...MODEL_CATALOG, ...GLM_CATALOG, ...MUSE_CATALOG].map((m) => [m.id, m]));
 
 /** Short badge text for a model id. Known ids use their catalog
  *  `short`; unknown explicit ids fall back to the family word. */
@@ -166,6 +166,11 @@ export function modelShort(id: string | null | undefined): string {
   if (glm) {
     const v = id.match(/glm-?(\d+(?:\.\d+)?)/i);
     return v ? `glm${v[1]}` : 'glm';
+  }
+  const muse = id.match(/muse/i);
+  if (muse) {
+    const v = id.match(/muse-spark-?(\d+(?:\.\d+)?)/i);
+    return v ? `muse${v[1]}` : 'muse';
   }
   const fm = id.match(/fable|mythos/i);
   if (fm) {

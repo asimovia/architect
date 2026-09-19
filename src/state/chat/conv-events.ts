@@ -53,8 +53,8 @@ function baseSummary(conv: string, prev: ChatConvSummary | undefined, ts: string
  *  absent and null are different answers. */
 function mirrorMeta(conv: string, ev: DaemonEvent): void {
   if (!state.convMeta[conv]) return;
-  const follow: Record<string, string> = { model: 'auto', effort: 'default', client: '' };
-  for (const key of ['model', 'effort', 'client'] as const) {
+  const follow: Record<string, string> = { model: 'auto', effort: 'default', client: '', provider: 'anthropic' };
+  for (const key of ['model', 'effort', 'client', 'provider'] as const) {
     if (!(key in ev)) continue;
     const value = str(ev[key]);
     setState('convMeta', conv, key, value || follow[key]);
@@ -75,6 +75,7 @@ function onCreatedOrMetaUpdated(conv: string, ev: DaemonEvent): void {
     model: str(ev.model) ?? cur?.model ?? null,
     effort: str(ev.effort) ?? cur?.effort ?? null,
     client: str(ev.client) ?? cur?.client ?? null,
+    provider: str(ev.provider) ?? cur?.provider ?? null,
   });
   mirrorMeta(conv, ev);
 }
