@@ -88,9 +88,13 @@ export function ClientModelEffortPicker(props: {
           class={SELECT_CLASS}
           aria-label="Client"
         >
+          {/* DM-CLI-14 — the current client stays selectable even when its
+              probe reads false (same rule the Provider dropdown already
+              uses): on a fresh machine every probe reads false and the old
+              code locked the operator out of even the value saved. */}
           <For each={clientsStore.options()}>
             {(c) => (
-              <option value={c.id} disabled={c.installed === false || c.authConfigured === false}>
+              <option value={c.id} disabled={(c.installed === false || c.authConfigured === false) && c.id !== props.value.client}>
                 {c.label}
                 {c.installed === false
                   ? ' (not installed on daemon host)'

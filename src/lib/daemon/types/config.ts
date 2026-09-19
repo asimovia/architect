@@ -93,6 +93,9 @@ export interface ProviderConfigInfo {
   keyPresent: boolean;
   available: boolean;
   models: { id: string; label: string }[];
+  /** DM-CLI-14 — the slot id this row shares its API key (and on/off
+   *  switch) with (`meta` ↔ `muse`), or null. Absent on older daemons. */
+  sharesKeyWith?: string | null;
 }
 export interface ProvidersConfigResponse {
   providers: ProviderConfigInfo[];

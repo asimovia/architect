@@ -96,6 +96,13 @@ export function ClientsBlock() {
     const c = cfg();
     return c.status === 'ok' ? c.data : null;
   };
+  // DM-CLI-14 — human label for the slot this row shares its credential
+  // with (`meta` ↔ `muse`). Falls back to the raw id when the daemon's
+  // list doesn't contain it (shouldn't happen, but never render blank).
+  const aliasLabel = (id: string | null | undefined): string | null => {
+    if (!id) return null;
+    return okData()?.providers.find((x) => x.id === id)?.label ?? id;
+  };
   const errorMessage = (): string => {
     const c = cfg();
     return c.status === 'error' ? c.message : '';
@@ -212,11 +219,19 @@ export function ClientsBlock() {
                     <Show when={!p.available}>
                       <span class="font-mono text-[9px] uppercase tracking-wider text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded px-1.5 py-0.5">unavailable</span>
                     </Show>
+                    {/* DM-CLI-14 — aliased rows (Meta ↔ Muse) share one key
+                        and one switch: say so, so the second row reads as
+                        "same credential" instead of a duplicate. */}
+                    <Show when={p.sharesKeyWith}>
+                      <span class="font-mono text-[9px] normal-case tracking-normal text-gray-500" title="One API key and one on/off switch serve both rows — set it once, either side.">
+                        shares key + switch with {aliasLabel(p.sharesKeyWith)}
+                      </span>
+                    </Show>
                   </div>
                   <Toggle
                     checked={p.enabled}
                     onChange={(v) => toggleProvider(p.id, v)}
-                    disabled={busy() !== null}
+                    disabled={busy() === `toggle:${p.id}`}
                     label={`Enable ${p.label}`}
                   />
                 </div>
