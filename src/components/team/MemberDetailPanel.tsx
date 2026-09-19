@@ -12,9 +12,10 @@
  * plumbing every section shares, and the danger zone.
  */
 
-import { Show, createEffect, createMemo, createResource, createSignal } from 'solid-js';
+import { Show, createEffect, createMemo, createResource, createSignal, onMount } from 'solid-js';
 import { daemonStore } from '~/state/daemon';
 import { teamStore } from '~/state/team';
+import { clientsStore } from '~/state/clients';
 import { DEFAULT_PROVIDER } from '~/lib/models';
 import type { EngineChoice } from '~/components/team/ClientModelEffortPicker';
 import { ModelSection } from '~/components/team/detail/ModelSection';
@@ -57,6 +58,18 @@ export default function MemberDetailPanel(props: { memberId: string; onClose: ()
   const diskMoved = createMemo(() => {
     const cur = member()?.updated ?? null;
     return mountedUpdated !== null && cur !== null && cur !== mountedUpdated;
+  });
+
+  // DM-CLI-13 — re-probe the client/provider catalog whenever this panel
+  // opens. It is one cheap GET (the daemon probes `which` + key presence
+  // fresh per request) and it is the difference between "I set the Meta key
+  // in ⚙ General and the dropdown still won't offer it" and it being there.
+  // The catalog is otherwise fetched once per cluster, so a key saved in
+  // ANOTHER cockpit tab — or in the config screen of a tab you then left —
+  // would never reach this dropdown until a reload.
+  onMount(() => {
+    const c = daemonStore.state.client;
+    if (c) void clientsStore.hydrate(c);
   });
 
   // Seed working copies once the frontmatter + body are available.

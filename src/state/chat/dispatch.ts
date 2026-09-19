@@ -121,11 +121,16 @@ export async function dispatchMessage(
   client: DaemonClient,
   opts: DispatchOpts,
 ): Promise<DispatchOutcome> {
-  const { conv, text, author } = opts;
+  const { conv, text, author, images = [] } = opts;
   const localTs = new Date().toISOString();
+  // Optimistic attachments (data: URLs) so pasted images paint instantly —
+  // the WS echo replaces them with the canonical /chat/uploads/ URLs.
+  const optimisticAttachments = images.length
+    ? images.map((i) => ({ kind: 'image' as const, media_type: i.mediaType, url: i.dataURL }))
+    : undefined;
   setState('convMap', conv, [
     ...(state.convMap[conv] ?? []),
-    { kind: 'user', text, author, ts: localTs, _placeholder_user: true },
+    { kind: 'user', text, author, ts: localTs, _placeholder_user: true, attachments: optimisticAttachments },
   ]);
 
   const body = buildBody(opts);

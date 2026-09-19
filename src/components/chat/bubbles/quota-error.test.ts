@@ -29,11 +29,11 @@ describe('detectQuotaError', () => {
   // 2026-09-16 — the cockpit hid two complete, correct answers behind a
   // quota card. The daemon had NOT rate-limited anything: /health showed
   // zero paused pools and the local CLI was authenticated. The agent had
-  // been asked which free Bitcoin API to use, so it said "rate limit"
-  // and "429" the way any answer on that subject must.
+  // simply been asked which free Bitcoin API to use, so it said "rate
+  // limit" and "429" the way any answer on that subject must.
   it('does not swallow an answer that TALKS about rate limits', () => {
     const answer =
-      '**Maestro: cero dependencias.** No aparece en ningun fichero del repo.\n\n' +
+      '**Maestro: cero dependencias.** No aparece en ningún fichero del repo.\n\n' +
       'Hoy todo va por `explorer-wallet-service` (nuestro indexador) con failover a `mempool.space`.\n\n' +
       '- **Primario**: `explorerWalletService` (RPC directo del nodo, sin rate limit).\n' +
       '- `mempool-service.js` ya autolimita a 600ms entre peticiones con backoff 2s/5s en 429.\n';
@@ -42,7 +42,7 @@ describe('detectQuotaError', () => {
 
   it('does not fire on prose that names an exhausted quota late', () => {
     const answer =
-      'He revisado los tres proveedores y te dejo el resumen abajo, con el coste de cada uno.\n\n' +
+      'He revisado los tres proveedores y te dejo el resumen abajo.\n\n' +
       'El plan gratuito de QuickNode se queda corto: en cuanto pasas de 300 req/s la key ' +
       'queda out of credits y el endpoint responde too many requests.';
     assert.equal(detectQuotaError(answer), null);

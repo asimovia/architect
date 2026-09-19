@@ -82,6 +82,19 @@ export const GLM_CATALOG: readonly ModelMeta[] = [
   { id: 'glm-4.5-air', label: 'GLM-4.5 Air',  short: 'glmair', hint: 'ZAI · GLM-4.5 Air · light/fast (also the small-model default)', group: 'GLM' },
 ];
 
+/** Meta's Muse Spark catalog — the model dropdown when Provider = Meta.
+ *  DM-CLI-13: Muse arrived here as a CLI, so a machine without the `muse`
+ *  binary could not use it at all. Meta's Model API is a plain
+ *  Anthropic-compatible endpoint, so the same key also works with no
+ *  install. Ids mirror the CLI's own catalog verbatim; "contributor" is
+ *  Meta's content-use distinction and must stay visible in the label. */
+export const MUSE_CATALOG: readonly ModelMeta[] = [
+  { id: 'muse-spark-1.3',             label: 'Muse Spark 1.3',             short: 'muse1.3', hint: 'Meta · Muse Spark 1.3', group: 'Muse' },
+  { id: 'muse-spark-1.3-contributor', label: 'Muse Spark 1.3 Contributor', short: 'muse1.3c', hint: 'Meta · 1.3 · content may improve Meta products', group: 'Muse' },
+  { id: 'muse-spark-1.2',             label: 'Muse Spark 1.2',             short: 'muse1.2', hint: 'Meta · Muse Spark 1.2 · also the small-model default', group: 'Muse' },
+  { id: 'muse-spark-1.2-contributor', label: 'Muse Spark 1.2 Contributor', short: 'muse1.2c', hint: 'Meta · 1.2 · content may improve Meta products', group: 'Muse' },
+];
+
 export interface ProviderMeta {
   id: string;
   label: string;
@@ -95,15 +108,23 @@ export interface ProviderMeta {
  *  (key present + enabled) is layered on top from the daemon's
  *  GET /clients `providers` list — see state/clients.ts `providersFor`. */
 export const PROVIDERS: readonly ProviderMeta[] = [
-  { id: 'anthropic', label: 'Anthropic',  requiresKey: false },
-  { id: 'zai',       label: 'ZAI (GLM)',  requiresKey: true },
+  { id: 'anthropic', label: 'Anthropic',              requiresKey: false },
+  { id: 'meta',      label: 'Meta (Muse Spark API)',  requiresKey: true },
+  { id: 'zai',       label: 'ZAI (GLM)',              requiresKey: true },
 ];
 
 export const DEFAULT_PROVIDER = 'anthropic';
 
 /** The model catalog for a provider id. Unknown → Anthropic (safe). */
 export function providerCatalog(providerId: string | null | undefined): readonly ModelMeta[] {
-  return (providerId || DEFAULT_PROVIDER).toLowerCase() === 'zai' ? GLM_CATALOG : MODEL_CATALOG;
+  switch ((providerId || DEFAULT_PROVIDER).toLowerCase()) {
+    case 'zai':
+      return GLM_CATALOG;
+    case 'meta':
+      return MUSE_CATALOG;
+    default:
+      return MODEL_CATALOG;
+  }
 }
 
 export interface EffortMeta {
