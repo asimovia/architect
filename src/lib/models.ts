@@ -154,6 +154,29 @@ export function isStaleModelForClient(
   return false;
 }
 
+/** ATM19 — the provider-aware sibling of `isStaleModelForClient`. Under
+ *  `claude-code` the feasible catalog is the PROVIDER's, so an Anthropic
+ *  id left behind while Provider = Meta is exactly as foreign as one
+ *  saved under Codex, and the editor used to seed the draft with it and
+ *  render a DIFFERENT row (the select fell back to the provider's first
+ *  model) while the save persisted the mismatch. True only for ids that
+ *  belong to another provider's catalog — an unknown id is a pin and
+ *  survives, same rule as `isStaleModelForClient`. */
+export function isStaleModelForEngine(
+  client: string | null | undefined,
+  provider: string | null | undefined,
+  model: string | null | undefined,
+): boolean {
+  const m = (model || '').trim();
+  if (!m) return false;
+  if (isStaleModelForClient(client, m)) return true;
+  if ((client || 'claude-code').toLowerCase() !== 'claude-code') return false;
+  if (providerCatalog(provider).some((x) => x.id === m)) return false;
+  // `auto` is claude-code's own sentinel and lives in the Anthropic
+  // catalog: under Meta/ZAI it is as foreign as a model id.
+  return m === 'auto' || ANTHROPIC_FAMILY_IDS.has(m) || MUSE_IDS.has(m);
+}
+
 /** The model catalog for a provider id. Unknown → Anthropic (safe). */
 export function providerCatalog(providerId: string | null | undefined): readonly ModelMeta[] {
   switch ((providerId || DEFAULT_PROVIDER).toLowerCase()) {

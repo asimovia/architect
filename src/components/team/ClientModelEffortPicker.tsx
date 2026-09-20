@@ -9,13 +9,16 @@
  * a member saved with one panel's idea of a valid combination is
  * dispatched by the other's.
  *
- * Two invariants live in `onClientChange` / `onProviderChange` and are
- * the reason this is one component rather than two copies:
- *   - switching CLIENT resets model+effort to that client's own first
- *     option, so a leftover claude-code model id is never submitted for
- *     a Gemini/Codex member;
- *   - switching PROVIDER resets the model, so an Anthropic id is never
- *     submitted for a ZAI member (or vice versa).
+ * The chain itself (which options each combo offers, what the combos
+ * below reset to) lives in `lib/engine-chain.ts` — the chat-wall header
+ * reads the same module, so the card and the header cannot disagree.
+ *
+ * ATM19 — every combo here also goes through `bindSelectValue`. Its
+ * options arrive from an async catalog, and Solid re-applies a select's
+ * value only when the VALUE changes, never when the options do: without
+ * it the Client combo read "Claude Code" on a Muse member (first row
+ * wins when the value matches nothing) while the models below it were
+ * correctly Muse's. See `lib/select-sync.ts`.
  *
  * Provider is claude-code-only — the other CLIs bring their own auth.
  */
@@ -24,24 +27,30 @@ import { For, Show, createMemo, onMount } from 'solid-js';
 import { clientsStore } from '~/state/clients';
 import { daemonStore } from '~/state/daemon';
 import { withLiveOption } from '~/lib/member-shadow';
-import { EFFORT_CATALOG, DEFAULT_PROVIDER, providerCatalog } from '~/lib/models';
+import { bindSelectValue } from '~/lib/select-sync';
+import { DEFAULT_PROVIDER, PROVIDERS } from '~/lib/models';
+import {
+  effortOptionsFor,
+  isClaudeCode,
+  modelOptionsFor,
+  selectClient,
+  selectProvider,
+  withLiveModel,
+  type EngineChoice,
+} from '~/lib/engine-chain';
+import type { ClientInfo, ProviderInfo } from '~/lib/daemon-client';
 
 const SELECT_CLASS =
   'w-full bg-[#020617] border border-gray-700/40 rounded px-2.5 py-1.5 text-[13px] font-mono text-gray-100 focus:outline-none focus:border-emerald-500/55';
 const LABEL_CLASS = 'block font-mono text-[10px] uppercase tracking-[0.14em] text-gray-500 mb-1.5';
 
-export interface EngineChoice {
-  client: string;
-  provider: string;
-  model: string;
-  effort: string;
-}
+export type { EngineChoice };
 
 /** Normalise a choice for submission: only claude-code carries a provider. */
 export function engineBody(c: EngineChoice): EngineChoice {
   return {
     client: c.client,
-    provider: c.client === 'claude-code' ? c.provider : DEFAULT_PROVIDER,
+    provider: isClaudeCode(c.client) ? c.provider : DEFAULT_PROVIDER,
     model: c.model,
     effort: c.effort,
   };
@@ -63,41 +72,44 @@ export function ClientModelEffortPicker(props: {
     const c = daemonStore.state.client;
     if (c) void clientsStore.hydrate(c);
   });
-  const isClaude = (): boolean => props.value.client === 'claude-code';
+  const isClaude = (): boolean => isClaudeCode(props.value.client);
   const catalog = createMemo(() => clientsStore.catalogFor(props.value.client));
-  const providerOptions = createMemo(() => clientsStore.providersFor('claude-code'));
-  const providerModels = createMemo(() => providerCatalog(props.value.provider));
-  const modelGroups = createMemo(() => [...new Set(providerModels().map((m) => m.group))]);
-  const efforts = createMemo(() => (isClaude() ? EFFORT_CATALOG : catalog().efforts));
-  // Empty daemon catalog (not yet hydrated): still show the live value so
-  // the selected effort never renders as nothing.
+
+  // Every combo below offers the LIVE value even when the catalog does
+  // not list it (daemon too old, not yet hydrated, a client uninstalled
+  // since the member was saved). A select whose value matches no option
+  // renders a different row — a lie about what this member runs.
+  const clientOptions = createMemo<ClientInfo[]>(() => {
+    const list = clientsStore.options();
+    const cur = (props.value.client || '').trim();
+    if (!cur || list.some((c) => c.id === cur)) return list;
+    return [...list, { id: cur, label: cur, installed: true, authConfigured: null, models: [], efforts: [] }];
+  });
+  const providerOptions = createMemo<ProviderInfo[]>(() => {
+    const list = clientsStore.providersFor('claude-code');
+    const cur = (props.value.provider || '').trim();
+    if (!cur || list.some((p) => p.id === cur)) return list;
+    const meta = PROVIDERS.find((p) => p.id === cur);
+    return [...list, { id: cur, label: meta?.label ?? cur, requiresKey: meta?.requiresKey ?? true, available: false }];
+  });
+  const modelGroups = createMemo(() =>
+    withLiveModel(modelOptionsFor(props.value.client, props.value.provider, catalog()), props.value.model),
+  );
   const liveEfforts = createMemo(() =>
-    withLiveOption(efforts().map((e) => ({ id: e.id, label: e.label })), props.value.effort),
+    withLiveOption(effortOptionsFor(props.value.client, catalog()), props.value.effort),
   );
 
-  // The three combos are one chained array driven by a single source:
-  // client → that client's own model/effort catalog (daemon live, except
-  // claude-code which pairs client + provider → provider catalog). A
-  // client switch always re-seeds model+effort from the NEW client's
-  // catalog, so a leftover id from the old CLI is never submitted for
-  // the new one; an empty catalog (daemon not yet hydrated) seeds '' /
-  // 'default' — "CLI default" — never another client's model.
+  // The combos are one chain driven by a single source (engine-chain):
+  // client → provider → model, effort ← client. Changing one above always
+  // re-seeds everything below from the NEW selection's catalog, so a
+  // leftover id from the old CLI/provider is never submitted for the new
+  // one; an empty catalog (daemon not yet hydrated) seeds '' / 'default'
+  // — "CLI default" — never another client's model.
   const onClientChange = (id: string): void => {
-    const cat = clientsStore.catalogFor(id);
-    props.onChange({
-      ...props.value,
-      client: id,
-      provider: id === 'claude-code' ? props.value.provider : DEFAULT_PROVIDER,
-      model: cat.models[0]?.id ?? '',
-      effort: cat.efforts[0]?.id ?? 'default',
-    });
+    props.onChange(selectClient(id, clientsStore.catalogFor(id)));
   };
   const onProviderChange = (id: string): void => {
-    props.onChange({
-      ...props.value,
-      provider: id,
-      model: providerCatalog(id)[0]?.id ?? '',
-    });
+    props.onChange(selectProvider(props.value, id, catalog()));
   };
 
   return (
@@ -107,6 +119,7 @@ export function ClientModelEffortPicker(props: {
           <label class={LABEL_CLASS}>Client</label>
         </Show>
         <select
+          ref={(el) => bindSelectValue(el, () => props.value.client, clientOptions)}
           value={props.value.client}
           onChange={(e) => onClientChange(e.currentTarget.value)}
           class={SELECT_CLASS}
@@ -116,7 +129,7 @@ export function ClientModelEffortPicker(props: {
               probe reads false (same rule the Provider dropdown already
               uses): on a fresh machine every probe reads false and the old
               code locked the operator out of even the value saved. */}
-          <For each={clientsStore.options()}>
+          <For each={clientOptions()}>
             {(c) => (
               <option value={c.id} disabled={(c.installed === false || c.authConfigured === false) && c.id !== props.value.client}>
                 {c.label}
@@ -139,6 +152,7 @@ export function ClientModelEffortPicker(props: {
             Provider
           </label>
           <select
+            ref={(el) => bindSelectValue(el, () => props.value.provider, providerOptions)}
             value={props.value.provider}
             onChange={(e) => onProviderChange(e.currentTarget.value)}
             class={SELECT_CLASS}
@@ -162,39 +176,31 @@ export function ClientModelEffortPicker(props: {
             Model <span class="text-gray-600 normal-case tracking-normal">· required</span>
           </label>
         </Show>
-        <Show
-          when={isClaude()}
-          fallback={
-            <select
-              value={props.value.model}
-              onChange={(e) => props.onChange({ ...props.value, model: e.currentTarget.value })}
-              class={SELECT_CLASS}
-              aria-label="Model"
-            >
-              <Show
-                when={catalog().models.length > 0}
-                fallback={<option value={props.value.model}>{props.value.model ? `${props.value.model} (member)` : 'Loading catalog…'}</option>}
-              >
-                <For each={withLiveOption(catalog().models, props.value.model)}>{(m) => <option value={m.id}>{m.label}</option>}</For>
-              </Show>
-            </select>
-          }
+        <select
+          ref={(el) => bindSelectValue(el, () => props.value.model, modelGroups)}
+          value={props.value.model}
+          onChange={(e) => props.onChange({ ...props.value, model: e.currentTarget.value })}
+          class={SELECT_CLASS}
+          aria-label="Model"
         >
-          <select
-            value={props.value.model}
-            onChange={(e) => props.onChange({ ...props.value, model: e.currentTarget.value })}
-            class={SELECT_CLASS}
-            aria-label="Model"
+          <Show
+            when={modelGroups().length > 0}
+            fallback={<option value={props.value.model}>Loading catalog…</option>}
           >
-            <For each={modelGroups()}>{(grp) => (
-              <optgroup label={grp}>
-                <For each={providerModels().filter((m) => m.group === grp)}>
-                  {(m) => <option value={m.id}>{m.label}</option>}
-                </For>
-              </optgroup>
-            )}</For>
-          </select>
-        </Show>
+            <For each={modelGroups()}>
+              {(g) => (
+                <Show
+                  when={g.group}
+                  fallback={<For each={g.items}>{(m) => <option value={m.id}>{m.label}</option>}</For>}
+                >
+                  <optgroup label={g.group as string}>
+                    <For each={g.items}>{(m) => <option value={m.id}>{m.label}</option>}</For>
+                  </optgroup>
+                </Show>
+              )}
+            </For>
+          </Show>
+        </select>
       </div>
 
       <div>

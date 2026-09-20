@@ -6,10 +6,16 @@
  * Singletons that already have a live instance are not pickable, but the
  * currently-bound member is always listed so the select never shows a
  * value that isn't among its options.
+ *
+ * ATM19 — `bindSelectValue` because the roster is async: Solid re-applies
+ * a select's value only when the VALUE changes, so a list that arrives
+ * after the first paint left the combo showing the first member instead
+ * of the bound one. See `lib/select-sync.ts`.
  */
 
 import { For, createMemo } from 'solid-js';
 import { teamStore } from '~/state/team';
+import { bindSelectValue } from '~/lib/select-sync';
 import type { TeamMember } from '~/lib/daemon-client';
 
 export default function MemberPicker(props: { current: string; onPick: (id: string) => void }) {
@@ -21,6 +27,7 @@ export default function MemberPicker(props: { current: string; onPick: (id: stri
   });
   return (
     <select
+      ref={(el) => bindSelectValue(el, () => props.current, options)}
       value={props.current}
       onChange={(e) => props.onPick(e.currentTarget.value)}
       title="Member — the init prompt this instance receives (editable until the first message)"

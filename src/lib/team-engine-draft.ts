@@ -12,7 +12,8 @@
  *    a clean draft, or when a different member is opened.
  */
 
-import { DEFAULT_PROVIDER, isStaleModelForClient } from './models.ts';
+import { DEFAULT_PROVIDER, isStaleModelForEngine } from './models.ts';
+import { defaultModelFor } from './engine-chain.ts';
 
 /** The four engine dials, as the picker edits them (all plain strings). */
 export interface EngineDraft {
@@ -37,6 +38,7 @@ export interface EngineSaved {
  */
 export function engineFromSaved(m: EngineSaved | undefined): EngineDraft {
   const client = (m?.client || '').trim() || 'claude-code';
+  const provider = (m?.provider || '').trim() || DEFAULT_PROVIDER;
   const rawModel = (m?.model || '').trim();
   // The empty-model default is client-aware: claude-code keeps its historic
   // `sonnet`, every other driver uses the empty id — "Default (CLI config)",
@@ -46,15 +48,17 @@ export function engineFromSaved(m: EngineSaved | undefined): EngineDraft {
   // Codex) heals to the CLI default instead of seeding the draft with it —
   // otherwise the picker shows it back as a "(member)" row and the next
   // Save re-persists the mismatch.
+  // ATM19: the heal is PROVIDER-aware too — under claude-code the feasible
+  // catalog is the provider's, so an Anthropic id left on a member now set
+  // to Meta is as foreign as one saved under Codex, and `defaultModelFor`
+  // (the same function the combos reset to) decides what replaces it.
   const model =
-    !rawModel || isStaleModelForClient(client, rawModel)
-      ? client === 'claude-code'
-        ? 'sonnet'
-        : ''
+    !rawModel || isStaleModelForEngine(client, provider, rawModel)
+      ? defaultModelFor(client, provider, { models: [], efforts: [] })
       : rawModel;
   return {
     client,
-    provider: (m?.provider || '').trim() || DEFAULT_PROVIDER,
+    provider,
     model,
     effort: (m?.effort || '').trim() || 'default',
   };

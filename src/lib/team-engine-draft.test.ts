@@ -69,3 +69,17 @@ test('a model saved under another client heals to the CLI default (ATM18)', () =
   assert.equal(engineFromSaved({ client: 'muse', model: 'muse-spark-1.3' }).model, 'muse-spark-1.3');
   assert.equal(engineFromSaved({ client: 'claude-code', model: 'sonnet' }).model, 'sonnet');
 });
+
+test('ATM19 — an Anthropic id left on a claude-code member now set to Meta heals', () => {
+  const saved = { client: 'claude-code', provider: 'meta', model: 'opus', effort: 'default' };
+  const draft = engineFromSaved(saved);
+  assert.equal(draft.model, 'muse-spark-1.3');
+  // Healed on open AND clean: Save persists the feasible value, and the
+  // panel does not cry "unsaved" for a fix the operator never typed.
+  assert.equal(isEngineDirty(saved, draft), false);
+});
+
+test('ATM19 — a pin that IS feasible under the provider survives', () => {
+  const saved = { client: 'claude-code', provider: 'zai', model: 'glm-4.7', effort: 'default' };
+  assert.equal(engineFromSaved(saved).model, 'glm-4.7');
+});

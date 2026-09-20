@@ -15,13 +15,19 @@
  * Meta / ZAI), the same catalog the member editor offers: a Muse member
  * shows Muse models in the header, not Anthropic ones with the truth
  * hiding in a "(member)" fallback row.
+ * ATM19 — those option lists now come from `lib/engine-chain`, the same
+ * module the member editor renders from (one chain, one answer), and
+ * both selects go through `bindSelectValue`: the catalog arrives after
+ * the first paint, and Solid re-applies a select's value only when the
+ * VALUE changes, never when the options do.
  */
 
-import { For, Show } from 'solid-js';
+import { For, createMemo } from 'solid-js';
 import { chatStore } from '~/state/chat';
 import { clientsStore } from '~/state/clients';
 import { withLiveOption } from '~/lib/member-shadow';
-import { EFFORT_CATALOG, providerCatalog } from '~/lib/models';
+import { bindSelectValue } from '~/lib/select-sync';
+import { effortOptionsFor, modelOptionsFor, withLiveModel } from '~/lib/engine-chain';
 
 const SELECT_MODEL =
   'bg-purple-500/10 border border-purple-500/30 rounded px-1.5 py-0.5 text-[10px] font-mono '
@@ -37,60 +43,41 @@ export default function ModelEffortPickers(props: {
   client: string;
   provider: string;
 }) {
-  const isClaudeCode = (): boolean => props.client === 'claude-code';
-  const catalog = () => clientsStore.catalogFor(props.client);
-  // claude-code models come from the conv's PROVIDER catalog (Anthropic /
-  // Meta / ZAI) — the same source the member editor uses — never from a
-  // hardcoded Anthropic-only list. Other clients use the daemon's live
-  // /clients catalog for that client (possibly still empty → the live
-  // value below keeps the combo honest instead of showing Claude models).
-  const claudeModels = () => providerCatalog(props.provider);
-  const claudeGroups = () => [...new Set(claudeModels().map((m) => m.group))];
-  // ATM14f — the combos always offer the LIVE value, even when the
-  // catalog hasn't caught up (not yet hydrated, unknown client, new
-  // model id): without a matching <option> the select would render the
-  // wrong row while the state underneath is already correct.
-  const liveModels = () => withLiveOption(catalog().models, props.model);
-  const liveEfforts = () =>
-    withLiveOption(
-      (isClaudeCode() ? EFFORT_CATALOG : catalog().efforts).map((e) => ({ id: e.id, label: e.label })),
-      props.effort,
-    );
-  const claudeModelKnown = (): boolean => claudeModels().some((m) => m.id === props.model);
+  const catalog = createMemo(() => clientsStore.catalogFor(props.client));
+  // The live value is always offered as its own row: without a matching
+  // <option> the select would render some other model while the state
+  // underneath is already correct (catalog not hydrated, unknown client,
+  // a pinned id the catalog doesn't list).
+  const modelGroups = createMemo(() =>
+    withLiveModel(modelOptionsFor(props.client, props.provider, catalog()), props.model),
+  );
+  const liveEfforts = createMemo(() => withLiveOption(effortOptionsFor(props.client, catalog()), props.effort));
+  const modelTitle = (): string =>
+    `Model — applies from the next turn (${props.client === 'claude-code' ? props.provider : props.client})`;
+
   return (
     <div class="flex items-center gap-1 flex-shrink-0">
-      <Show
-        when={isClaudeCode()}
-        fallback={
-          <select
-            value={props.model}
-            onChange={(e) => chatStore.setConvModel(props.conv, e.currentTarget.value)}
-            title={`Model — applies from the next turn (${props.client})`}
-            class={SELECT_MODEL}
-          >
-            <For each={liveModels()}>{(m) => <option value={m.id}>{m.label}</option>}</For>
-          </select>
-        }
-      >
-        <select
-          value={props.model}
-          onChange={(e) => chatStore.setConvModel(props.conv, e.currentTarget.value)}
-          title={`Model — applies from the next turn (${props.provider})`}
-          class={SELECT_MODEL}
-        >
-          <For each={claudeGroups()}>{(grp) => (
-            <optgroup label={grp}>
-              <For each={claudeModels().filter((m) => m.group === grp)}>
-                {(m) => <option value={m.id}>{m.label}</option>}
-              </For>
-            </optgroup>
-          )}</For>
-          <Show when={!claudeModelKnown()}>
-            <option value={props.model}>{`${props.model} (member)`}</option>
-          </Show>
-        </select>
-      </Show>
       <select
+        ref={(el) => bindSelectValue(el, () => props.model, modelGroups)}
+        value={props.model}
+        onChange={(e) => chatStore.setConvModel(props.conv, e.currentTarget.value)}
+        title={modelTitle()}
+        class={SELECT_MODEL}
+      >
+        <For each={modelGroups()}>
+          {(g) => (
+            g.group
+              ? (
+                <optgroup label={g.group}>
+                  <For each={g.items}>{(m) => <option value={m.id}>{m.label}</option>}</For>
+                </optgroup>
+              )
+              : <For each={g.items}>{(m) => <option value={m.id}>{m.label}</option>}</For>
+          )}
+        </For>
+      </select>
+      <select
+        ref={(el) => bindSelectValue(el, () => props.effort, liveEfforts)}
         value={props.effort}
         onChange={(e) => chatStore.setConvEffort(props.conv, e.currentTarget.value)}
         title="Effort (reasoning depth) — applies from the next turn"
