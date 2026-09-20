@@ -69,10 +69,10 @@ export default function ModelEffortPickers(props: {
             g.group
               ? (
                 <optgroup label={g.group}>
-                  <For each={g.items}>{(m) => <option value={m.id}>{m.label}</option>}</For>
+                  <For each={g.items}>{(m) => <option value={m.id} selected={m.id === props.model}>{m.label}</option>}</For>
                 </optgroup>
               )
-              : <For each={g.items}>{(m) => <option value={m.id}>{m.label}</option>}</For>
+              : <For each={g.items}>{(m) => <option value={m.id} selected={m.id === props.model}>{m.label}</option>}</For>
           )}
         </For>
       </select>
@@ -84,7 +84,7 @@ export default function ModelEffortPickers(props: {
         class={SELECT_EFFORT}
       >
         <For each={liveEfforts()}>
-          {(e) => <option value={e.id}>{e.label}</option>}
+          {(e) => <option value={e.id} selected={e.id === props.effort}>{e.label}</option>}
         </For>
       </select>
     </div>

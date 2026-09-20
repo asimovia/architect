@@ -131,7 +131,11 @@ export function ClientModelEffortPicker(props: {
               code locked the operator out of even the value saved. */}
           <For each={clientOptions()}>
             {(c) => (
-              <option value={c.id} disabled={(c.installed === false || c.authConfigured === false) && c.id !== props.value.client}>
+              <option
+                value={c.id}
+                selected={c.id === props.value.client}
+                disabled={(c.installed === false || c.authConfigured === false) && c.id !== props.value.client}
+              >
                 {c.label}
                 {c.installed === false
                   ? ' (not installed on daemon host)'
@@ -160,7 +164,7 @@ export function ClientModelEffortPicker(props: {
           >
             <For each={providerOptions()}>
               {(pr) => (
-                <option value={pr.id} disabled={!pr.available && pr.id !== props.value.provider}>
+                <option value={pr.id} selected={pr.id === props.value.provider} disabled={!pr.available && pr.id !== props.value.provider}>
                   {pr.label}
                   {pr.requiresKey && !pr.available ? ' (needs API key — set in Config)' : ''}
                 </option>
@@ -191,10 +195,10 @@ export function ClientModelEffortPicker(props: {
               {(g) => (
                 <Show
                   when={g.group}
-                  fallback={<For each={g.items}>{(m) => <option value={m.id}>{m.label}</option>}</For>}
+                  fallback={<For each={g.items}>{(m) => <option value={m.id} selected={m.id === props.value.model}>{m.label}</option>}</For>}
                 >
                   <optgroup label={g.group as string}>
-                    <For each={g.items}>{(m) => <option value={m.id}>{m.label}</option>}</For>
+                    <For each={g.items}>{(m) => <option value={m.id} selected={m.id === props.value.model}>{m.label}</option>}</For>
                   </optgroup>
                 </Show>
               )}

@@ -34,7 +34,7 @@ export default function MemberPicker(props: { current: string; onPick: (id: stri
       class="bg-gray-800/60 border border-gray-700/60 rounded px-1.5 py-0.5 text-[11px] text-gray-100 focus:outline-none focus:border-emerald-500/55 flex-shrink-0 max-w-[150px]"
     >
       <For each={options()}>
-        {(m) => <option value={m.id}>{m.emoji} {m.name}</option>}
+        {(m) => <option value={m.id} selected={m.id === props.current}>{m.emoji} {m.name}</option>}
       </For>
     </select>
   );

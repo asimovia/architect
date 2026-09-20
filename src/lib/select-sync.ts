@@ -24,6 +24,12 @@
  * `createEffect` (not a render effect) runs after `<For>` has patched the
  * option nodes for the same update, so re-reading the option source here
  * is enough to re-apply the value in the same frame.
+ *
+ * Belt AND braces: every combo that uses this ALSO sets `selected` on each
+ * `<option>` as it is created, so the right row is picked even before this
+ * effect runs and regardless of the order Solid flushes things in. Two
+ * cheap mechanisms, because this exact class of bug has now been reported
+ * four times (ATM14f → ATM17 → ATM18 → ATM19).
  */
 
 import { createEffect } from 'solid-js';
