@@ -16,3 +16,10 @@
 
 /
   Cache-Control: no-cache, must-revalidate
+
+# ATM22 — the update signal. `/health.json` is what a running tab polls
+# to learn that a newer build is live; an edge-cached copy is a tab that
+# never raises the blue "reload" bar. The poll already cache-busts with
+# `?t=`, this closes the plain-URL path too.
+/health.json
+  Cache-Control: no-store
