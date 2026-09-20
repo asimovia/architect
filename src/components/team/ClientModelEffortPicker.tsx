@@ -13,12 +13,12 @@
  * below reset to) lives in `lib/engine-chain.ts` — the chat-wall header
  * reads the same module, so the card and the header cannot disagree.
  *
- * ATM19 — every combo here also goes through `bindSelectValue`. Its
- * options arrive from an async catalog, and Solid re-applies a select's
- * value only when the VALUE changes, never when the options do: without
- * it the Client combo read "Claude Code" on a Muse member (first row
- * wins when the value matches nothing) while the models below it were
- * correctly Muse's. See `lib/select-sync.ts`.
+ * ATM21 — these are `<Combo>`s, not native `<select>`s. The row a native
+ * select displays is the browser's, and on an async catalog it stopped
+ * agreeing with the state: a Muse member read "Claude Code" with Muse
+ * models under it. Two rounds of patching that (ATM19 re-applying
+ * `el.value`, ATM19b `selected` per option) did not end the reports, so
+ * the displayed label is now a pure function of the value.
  *
  * Provider is claude-code-only — the other CLIs bring their own auth.
  */
@@ -27,7 +27,7 @@ import { For, Show, createMemo, onMount } from 'solid-js';
 import { clientsStore } from '~/state/clients';
 import { daemonStore } from '~/state/daemon';
 import { withLiveOption } from '~/lib/member-shadow';
-import { bindSelectValue } from '~/lib/select-sync';
+import { Combo, type ComboOption } from '~/components/ui/Combo';
 import { DEFAULT_PROVIDER, PROVIDERS } from '~/lib/models';
 import {
   effortOptionsFor,
@@ -38,10 +38,7 @@ import {
   withLiveModel,
   type EngineChoice,
 } from '~/lib/engine-chain';
-import type { ClientInfo, ProviderInfo } from '~/lib/daemon-client';
 
-const SELECT_CLASS =
-  'w-full bg-[#020617] border border-gray-700/40 rounded px-2.5 py-1.5 text-[13px] font-mono text-gray-100 focus:outline-none focus:border-emerald-500/55';
 const LABEL_CLASS = 'block font-mono text-[10px] uppercase tracking-[0.14em] text-gray-500 mb-1.5';
 
 export type { EngineChoice };
@@ -75,29 +72,49 @@ export function ClientModelEffortPicker(props: {
   const isClaude = (): boolean => isClaudeCode(props.value.client);
   const catalog = createMemo(() => clientsStore.catalogFor(props.value.client));
 
-  // Every combo below offers the LIVE value even when the catalog does
-  // not list it (daemon too old, not yet hydrated, a client uninstalled
-  // since the member was saved). A select whose value matches no option
-  // renders a different row — a lie about what this member runs.
-  const clientOptions = createMemo<ClientInfo[]>(() => {
-    const list = clientsStore.options();
+  // Every combo offers the LIVE value even when the catalog does not list
+  // it (daemon too old, not yet hydrated, a CLI uninstalled since the
+  // member was saved) — and `Combo` shows the raw id rather than another
+  // option's label if even that is missing.
+  const clientOptions = createMemo<ComboOption[]>(() => {
+    const list = clientsStore.options().map((c) => ({
+      id: c.id,
+      label: c.label,
+      // DM-CLI-14 — the value already saved stays pickable even when its
+      // probe reads false; on a fresh machine every probe reads false.
+      disabled: (c.installed === false || c.authConfigured === false) && c.id !== props.value.client,
+      note: c.installed === false
+        ? 'not installed on daemon host'
+        : c.authConfigured === false
+          ? 'authentication required or disabled — see ⚙ General settings'
+          : null,
+    }));
     const cur = (props.value.client || '').trim();
     if (!cur || list.some((c) => c.id === cur)) return list;
-    return [...list, { id: cur, label: cur, installed: true, authConfigured: null, models: [], efforts: [] }];
+    return [...list, { id: cur, label: cur, disabled: false, note: 'not in the daemon catalog' }];
   });
-  const providerOptions = createMemo<ProviderInfo[]>(() => {
-    const list = clientsStore.providersFor('claude-code');
+  const providerOptions = createMemo<ComboOption[]>(() => {
+    const list = clientsStore.providersFor('claude-code').map((p) => ({
+      id: p.id,
+      label: p.label,
+      disabled: !p.available && p.id !== props.value.provider,
+      note: p.requiresKey && !p.available ? 'needs API key — set in Config' : null,
+    }));
     const cur = (props.value.provider || '').trim();
     if (!cur || list.some((p) => p.id === cur)) return list;
     const meta = PROVIDERS.find((p) => p.id === cur);
-    return [...list, { id: cur, label: meta?.label ?? cur, requiresKey: meta?.requiresKey ?? true, available: false }];
+    return [...list, { id: cur, label: meta?.label ?? cur, disabled: false, note: 'not reported by the daemon' }];
   });
-  const modelGroups = createMemo(() =>
-    withLiveModel(modelOptionsFor(props.value.client, props.value.provider, catalog()), props.value.model),
+  const modelOptions = createMemo<ComboOption[]>(() =>
+    withLiveModel(modelOptionsFor(props.value.client, props.value.provider, catalog()), props.value.model)
+      .flatMap((g) => g.items.map((m) => ({ id: m.id, label: m.label, group: g.group }))),
   );
   const liveEfforts = createMemo(() =>
     withLiveOption(effortOptionsFor(props.value.client, catalog()), props.value.effort),
   );
+  // The note rows carry the "why is this greyed out" text the old
+  // <option> labels used to concatenate into the row itself.
+  const noteOf = (o: ComboOption): string | null => o.note ?? null;
 
   // The combos are one chain driven by a single source (engine-chain):
   // client → provider → model, effort ← client. Changing one above always
@@ -118,59 +135,29 @@ export function ClientModelEffortPicker(props: {
         <Show when={props.labels}>
           <label class={LABEL_CLASS}>Client</label>
         </Show>
-        <select
-          ref={(el) => bindSelectValue(el, () => props.value.client, clientOptions)}
+        <Combo
+          ariaLabel="Client"
           value={props.value.client}
-          onChange={(e) => onClientChange(e.currentTarget.value)}
-          class={SELECT_CLASS}
-          aria-label="Client"
-        >
-          {/* DM-CLI-14 — the current client stays selectable even when its
-              probe reads false (same rule the Provider dropdown already
-              uses): on a fresh machine every probe reads false and the old
-              code locked the operator out of even the value saved. */}
-          <For each={clientOptions()}>
-            {(c) => (
-              <option
-                value={c.id}
-                selected={c.id === props.value.client}
-                disabled={(c.installed === false || c.authConfigured === false) && c.id !== props.value.client}
-              >
-                {c.label}
-                {c.installed === false
-                  ? ' (not installed on daemon host)'
-                  : c.authConfigured === false
-                    ? ' (authentication required or disabled — see ⚙ General settings)'
-                    : ''}
-              </option>
-            )}
-          </For>
-        </select>
+          options={clientOptions()}
+          onChange={onClientChange}
+          noteFor={noteOf}
+        />
       </div>
 
       {/* Provider (MPV1) — claude-code only. Unavailable providers (no key
-          set in Config) are shown but not selectable. */}
+          set in Config) are shown but not pickable. */}
       <Show when={isClaude()}>
         <div>
           <label class={props.labels ? LABEL_CLASS : 'block font-mono text-[9px] uppercase tracking-[0.14em] text-gray-600'}>
             Provider
           </label>
-          <select
-            ref={(el) => bindSelectValue(el, () => props.value.provider, providerOptions)}
+          <Combo
+            ariaLabel="Provider"
             value={props.value.provider}
-            onChange={(e) => onProviderChange(e.currentTarget.value)}
-            class={SELECT_CLASS}
-            aria-label="Provider"
-          >
-            <For each={providerOptions()}>
-              {(pr) => (
-                <option value={pr.id} selected={pr.id === props.value.provider} disabled={!pr.available && pr.id !== props.value.provider}>
-                  {pr.label}
-                  {pr.requiresKey && !pr.available ? ' (needs API key — set in Config)' : ''}
-                </option>
-              )}
-            </For>
-          </select>
+            options={providerOptions()}
+            onChange={onProviderChange}
+            noteFor={noteOf}
+          />
         </div>
       </Show>
 
@@ -180,31 +167,13 @@ export function ClientModelEffortPicker(props: {
             Model <span class="text-gray-600 normal-case tracking-normal">· required</span>
           </label>
         </Show>
-        <select
-          ref={(el) => bindSelectValue(el, () => props.value.model, modelGroups)}
+        <Combo
+          ariaLabel="Model"
           value={props.value.model}
-          onChange={(e) => props.onChange({ ...props.value, model: e.currentTarget.value })}
-          class={SELECT_CLASS}
-          aria-label="Model"
-        >
-          <Show
-            when={modelGroups().length > 0}
-            fallback={<option value={props.value.model}>Loading catalog…</option>}
-          >
-            <For each={modelGroups()}>
-              {(g) => (
-                <Show
-                  when={g.group}
-                  fallback={<For each={g.items}>{(m) => <option value={m.id} selected={m.id === props.value.model}>{m.label}</option>}</For>}
-                >
-                  <optgroup label={g.group as string}>
-                    <For each={g.items}>{(m) => <option value={m.id} selected={m.id === props.value.model}>{m.label}</option>}</For>
-                  </optgroup>
-                </Show>
-              )}
-            </For>
-          </Show>
-        </select>
+          options={modelOptions()}
+          onChange={(id) => props.onChange({ ...props.value, model: id })}
+          placeholder={modelOptions().length ? '—' : 'Loading catalog…'}
+        />
       </div>
 
       <div>

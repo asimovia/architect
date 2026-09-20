@@ -7,15 +7,15 @@
  * currently-bound member is always listed so the select never shows a
  * value that isn't among its options.
  *
- * ATM19 — `bindSelectValue` because the roster is async: Solid re-applies
- * a select's value only when the VALUE changes, so a list that arrives
- * after the first paint left the combo showing the first member instead
- * of the bound one. See `lib/select-sync.ts`.
+ * ATM21 — a `<Combo>`, not a native `<select>`: the roster is async, and
+ * a select that gets its options after its value shows whatever row the
+ * browser picked meanwhile (it showed the first member instead of the
+ * bound one). The label is now computed from `props.current`.
  */
 
-import { For, createMemo } from 'solid-js';
+import { createMemo } from 'solid-js';
 import { teamStore } from '~/state/team';
-import { bindSelectValue } from '~/lib/select-sync';
+import { Combo, type ComboOption } from '~/components/ui/Combo';
 import type { TeamMember } from '~/lib/daemon-client';
 
 export default function MemberPicker(props: { current: string; onPick: (id: string) => void }) {
@@ -25,17 +25,17 @@ export default function MemberPicker(props: { current: string; onPick: (id: stri
     if (cur && !list.some((m) => m.id === cur.id)) return [cur, ...list];
     return list;
   });
+  const comboOptions = createMemo<ComboOption[]>(() =>
+    options().map((m) => ({ id: m.id, label: `${m.emoji} ${m.name}` })),
+  );
   return (
-    <select
-      ref={(el) => bindSelectValue(el, () => props.current, options)}
+    <Combo
+      ariaLabel="Member"
       value={props.current}
-      onChange={(e) => props.onPick(e.currentTarget.value)}
+      options={comboOptions()}
+      onChange={props.onPick}
       title="Member — the init prompt this instance receives (editable until the first message)"
-      class="bg-gray-800/60 border border-gray-700/60 rounded px-1.5 py-0.5 text-[11px] text-gray-100 focus:outline-none focus:border-emerald-500/55 flex-shrink-0 max-w-[150px]"
-    >
-      <For each={options()}>
-        {(m) => <option value={m.id} selected={m.id === props.current}>{m.emoji} {m.name}</option>}
-      </For>
-    </select>
+      class="flex items-center gap-1 bg-gray-800/60 border border-gray-700/60 rounded px-1.5 py-0.5 text-[11px] text-gray-100 hover:border-emerald-500/55 focus:outline-none flex-shrink-0 max-w-[150px]"
+    />
   );
 }

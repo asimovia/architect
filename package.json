@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite --port 4173",
     "sync-version": "node scripts/sync-daemon-version.mjs",
-    "prebuild": "npm run sync-version",
+    "prebuild": "npm run sync-version && node scripts/bump-build-number.mjs",
     "build": "vite build",
     "preview": "vite preview --port 4174",
     "typecheck": "tsc --noEmit",

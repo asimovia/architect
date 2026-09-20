@@ -13,9 +13,17 @@
  * serving a newer bundle — every fix required a manual hard refresh
  * and the operator had no signal that a refresh was even needed.
  *
+ * ATM22 — the comparison is now a NUMBER. `prebuild` bumps
+ * `build-number.json` on every build, the number is baked into both the
+ * bundle and `dist/health.json`, and `server build > my build` is what
+ * raises the banner. A git SHA said nothing about order ("is 8e6db5b
+ * newer than 70563be?"), so "did my tab update?" had no answer the
+ * operator could check at a glance. The commit comparison stays as the
+ * fallback for a build that predates the number.
+ *
  * How it works:
  *   - The Vite build emits `dist/health.json` with
- *     `{name, version, commit, built_at}` on every deploy. The
+ *     `{name, version, build, commit, built_at}` on every deploy. The
  *     commit is the short git SHA at build time. Bundled cockpit
  *     code reads its OWN commit through `import.meta.env.VITE_BUILD_COMMIT`.
  *   - At runtime we fetch `/health.json` (cache-busted with `?t=…`)
@@ -40,6 +48,7 @@ const HEALTH_URL = '/health.json';
 interface CockpitHealth {
   name?: string;
   version?: string;
+  build?: number;
   commit?: string;
   built_at?: string;
 }
@@ -53,12 +62,27 @@ export const COCKPIT_COMMIT: string =
 export const COCKPIT_VERSION: string =
   (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_BUILD_VERSION ?? '0.0.0';
 
+/** ATM22 — this bundle's build number. 0 = built before the series
+ *  existed (or without the prebuild), which falls back to the commit
+ *  comparison below. */
+export const COCKPIT_BUILD: number = Number(
+  (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_BUILD_NUMBER ?? '0',
+) || 0;
+
 const [serverCommit, setServerCommit] = createSignal<string | null>(null);
+const [serverBuild, setServerBuild] = createSignal<number | null>(null);
 const [lastCheckAt, setLastCheckAt] = createSignal<number | null>(null);
 
-/** True when /health.json reports a different commit than this bundle.
- *  Stays true once it flips — the operator must reload to clear it. */
+/** The build number the server is serving, or null before the first
+ *  successful poll (or on a deploy that predates the series). */
+export const latestCockpitBuild = (): number | null => serverBuild();
+
+/** True when the deployed cockpit is NEWER than this tab's bundle.
+ *  Number first (monotonic, ordered); commit only as a fallback when
+ *  either side has no number. Stays true until the operator reloads. */
 export const cockpitOutdated = (): boolean => {
+  const sb = serverBuild();
+  if (sb !== null && COCKPIT_BUILD > 0) return sb > COCKPIT_BUILD;
   const s = serverCommit();
   if (!s || s === 'unknown') return false; // can't tell → fail open
   if (COCKPIT_COMMIT === 'unknown') return false;
@@ -90,13 +114,17 @@ export async function probeCockpitHealth(): Promise<string | null> {
       return serverCommit();
     }
     const j = (await res.json()) as CockpitHealth;
+    if (Number.isFinite(j.build)) setServerBuild(Math.floor(j.build as number));
     const c = typeof j.commit === 'string' && j.commit.length > 0 ? j.commit : null;
     if (c) {
       const prev = serverCommit();
       setServerCommit(c);
       setLastCheckAt(Date.now());
       if (prev !== c && prev !== null) {
-        log.info('cockpit health: new server commit detected', { from: prev, to: c, bundled: COCKPIT_COMMIT });
+        log.info('cockpit health: new server build detected', {
+          from: prev, to: c, bundled: COCKPIT_COMMIT,
+          build: serverBuild(), myBuild: COCKPIT_BUILD,
+        });
       }
     }
     return c;

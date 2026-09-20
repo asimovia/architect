@@ -12,18 +12,25 @@
  */
 
 import { Show } from 'solid-js';
-import { cockpitOutdated, latestCockpitCommit, COCKPIT_COMMIT, probeCockpitHealth } from '~/lib/cockpit-version';
+import {
+  COCKPIT_BUILD,
+  COCKPIT_COMMIT,
+  cockpitOutdated,
+  latestCockpitBuild,
+  latestCockpitCommit,
+  probeCockpitHealth,
+} from '~/lib/cockpit-version';
 
 export default function CockpitOutdatedBanner() {
   const refresh = (): void => { window.location.reload(); };
   return (
     <Show when={cockpitOutdated()}>
       <div class="border-b border-cyan-500/40 bg-cyan-500/15 text-cyan-100 text-[12px] px-4 py-2 flex items-center gap-3">
-        <span class="font-mono text-cyan-300/90 flex-shrink-0">↻ cockpit ahead</span>
+        <span class="font-mono text-cyan-300/90 flex-shrink-0">↻ new cockpit</span>
         <span class="flex-1 min-w-0">
-          A new Architect cockpit is live (<span class="font-mono text-cyan-300">{latestCockpitCommit() ?? '?'}</span>).
-          Your tab is running <span class="font-mono text-cyan-300">{COCKPIT_COMMIT}</span>.
-          Reload to pick up the new bundle — fixes shipped after that commit are not in this tab yet.
+          Architect <span class="font-mono text-cyan-300">{latestCockpitBuild() ?? latestCockpitCommit() ?? '?'}</span> is live.
+          This tab is running <span class="font-mono text-cyan-300">{COCKPIT_BUILD || COCKPIT_COMMIT}</span>.
+          Reload to pick it up — anything shipped since is not in this tab yet.
         </span>
         <button
           type="button"

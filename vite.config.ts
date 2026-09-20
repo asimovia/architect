@@ -4,6 +4,19 @@ import { resolve } from 'node:path';
 import { execSync } from 'node:child_process';
 import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 
+/** ATM22 — the monotonic build number `prebuild` writes. Read at config
+ *  time so the bundle and dist/health.json always carry the same one. */
+function readBuildNumber(): number {
+  try {
+    const raw = JSON.parse(readFileSync(resolve(__dirname, 'build-number.json'), 'utf-8')) as { build?: number };
+    if (Number.isFinite(raw?.build)) return Math.floor(raw.build as number);
+  } catch {
+    // Not there yet (fresh clone before the first build) — 0 means
+    // "unknown", and the cockpit falls back to comparing commits.
+  }
+  return 0;
+}
+
 // M0.2 — Health endpoint plugin. Writes `dist/health.json` at
 // `closeBundle` time with the package version, the short git SHA,
 // and an ISO timestamp. Audit §4.4 requires this — a curl-readable
@@ -28,6 +41,10 @@ function healthJsonPlugin(): Plugin {
       const body = {
         name: pkg.name,
         version: pkg.version,
+        // ATM22 — the number the running tab compares itself against.
+        // Monotonic, bumped by `prebuild`; a tab whose own build is lower
+        // than this one raises the "reload" bar.
+        build: readBuildNumber(),
         commit,
         built_at: new Date().toISOString(),
       };
@@ -59,6 +76,7 @@ function buildEnvDefine(): Record<string, string> {
   const built = new Date().toISOString();
   return {
     'import.meta.env.VITE_BUILD_VERSION': JSON.stringify(pkg.version),
+    'import.meta.env.VITE_BUILD_NUMBER': JSON.stringify(String(readBuildNumber())),
     'import.meta.env.VITE_BUILD_COMMIT': JSON.stringify(commit),
     'import.meta.env.VITE_BUILD_DATE': JSON.stringify(built),
   };

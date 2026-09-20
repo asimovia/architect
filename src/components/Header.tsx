@@ -9,7 +9,7 @@ import { uiStore, type Zone } from '~/state/ui';
 import { mcModal } from '~/lib/modal';
 import { useTlsDaemon, LOOPBACK_HOSTNAME } from '~/lib/transport';
 import { isDaemonBehind, EXPECTED_DAEMON_VERSION } from '~/lib/version';
-import { cockpitOutdated, COCKPIT_COMMIT } from '~/lib/cockpit-version';
+import { cockpitOutdated, latestCockpitBuild, COCKPIT_BUILD, COCKPIT_COMMIT } from '~/lib/cockpit-version';
 import ThemePicker from '~/components/ThemePicker';
 import GeneralConfigDrawer from '~/components/GeneralConfigDrawer';
 
@@ -34,7 +34,8 @@ function openAboutModal(): void {
       <div class="flex flex-col gap-3.5 py-2">
         <div class="flex items-center gap-2.5 flex-wrap">
           <span class="font-mono text-[11px] text-gray-500 tracking-widest uppercase">build</span>
-          <span class="font-mono text-base text-emerald-400 font-bold">{BUILD_VERSION}</span>
+          <span class="font-mono text-base text-emerald-400 font-bold">{COCKPIT_BUILD || BUILD_VERSION}</span>
+          <span class="font-mono text-[10px] text-gray-600">· {BUILD_VERSION}</span>
           <Show when={BUILD_COMMIT}>
             <span class="font-mono text-[10px] text-gray-600">· {BUILD_COMMIT.slice(0, 7)}</span>
           </Show>
@@ -43,7 +44,7 @@ function openAboutModal(): void {
           </Show>
           {/* The pill's amber half, spelled out: is THIS tab the deployed build? */}
           <span class={`font-mono text-[10px] ${cockpitOutdated() ? 'text-amber-300' : 'text-gray-500'}`}>
-            {cockpitOutdated() ? '· newer build deployed — reload' : '· up to date'}
+            {cockpitOutdated() ? `· build ${latestCockpitBuild() ?? '?'} is live — reload` : '· up to date'}
           </span>
         </div>
         <div class="h-px bg-gray-700/30" />
@@ -331,7 +332,10 @@ function VersionPill() {
   const daemonV = () => daemonStore.state.health?.version ?? '';
   const daemonStale = () => isDaemonBehind(daemonV());
   const cockpitStale = () => cockpitOutdated();
-  const cockpitV = () => (COCKPIT_COMMIT && COCKPIT_COMMIT !== 'unknown' ? COCKPIT_COMMIT.slice(0, 7) : 'dev');
+  // ATM22 — the build NUMBER is the operator-facing identity: it only
+  // ever goes up, so "did my tab update?" is answerable at a glance. The
+  // commit stays in the About modal for the agent-facing question.
+  const cockpitV = () => (COCKPIT_BUILD > 0 ? String(COCKPIT_BUILD) : (COCKPIT_COMMIT || 'dev').slice(0, 7));
   // Degraded states say what is wrong instead of a version — reading only
   // `phase` (which stays `connected` through reconnecting and fatal) is
   // what made the pill lie in the first place.
@@ -346,7 +350,7 @@ function VersionPill() {
   const title = () => [
     LINK_TITLE[status()],
     `daemon ${daemonV() || '—'}${daemonStale() ? ` — behind ${EXPECTED_DAEMON_VERSION}, update it` : ' — up to date'}`,
-    `cockpit ${cockpitV()}${cockpitStale() ? ' — a newer build is deployed, reload' : ' — up to date'}`,
+    `cockpit ${cockpitV()}${cockpitStale() ? ` — build ${latestCockpitBuild() ?? '?'} is live, reload` : ' — up to date'}`,
     'click for build details',
   ].join('\n');
   return (
@@ -357,11 +361,13 @@ function VersionPill() {
       title={title()}
     >
       <span class={`w-1.5 h-1.5 rounded-full ${LINK_DOT[status()]}`} />
+      {/* The cockpit half is ALWAYS shown: a disconnected tab is exactly
+          when the operator needs to know which build they are on. */}
       <Show when={!degraded()} fallback={<span class="uppercase">{degraded()}</span>}>
         <span classList={{ 'text-amber-300': daemonStale() }}>{daemonV() || 'daemon'}</span>
-        <span class="text-gray-600">·</span>
-        <span classList={{ 'text-amber-300': cockpitStale() }}>arch {cockpitV()}</span>
       </Show>
+      <span class="text-gray-600">·</span>
+      <span classList={{ 'text-amber-300': cockpitStale() }}>arch {cockpitV()}</span>
     </button>
   );
 }

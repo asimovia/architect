@@ -15,26 +15,27 @@
  * Meta / ZAI), the same catalog the member editor offers: a Muse member
  * shows Muse models in the header, not Anthropic ones with the truth
  * hiding in a "(member)" fallback row.
- * ATM19 — those option lists now come from `lib/engine-chain`, the same
- * module the member editor renders from (one chain, one answer), and
- * both selects go through `bindSelectValue`: the catalog arrives after
- * the first paint, and Solid re-applies a select's value only when the
- * VALUE changes, never when the options do.
+ * ATM19 — those option lists come from `lib/engine-chain`, the same
+ * module the member editor renders from: one chain, one answer.
+ * ATM21 — and they render through `<Combo>`, not a native `<select>`:
+ * the catalog arrives after the first paint, and a native select keeps
+ * showing whatever row the browser picked meanwhile. The label is now a
+ * pure function of the conv's engine.
  */
 
-import { For, createMemo } from 'solid-js';
+import { createMemo } from 'solid-js';
 import { chatStore } from '~/state/chat';
 import { clientsStore } from '~/state/clients';
 import { withLiveOption } from '~/lib/member-shadow';
-import { bindSelectValue } from '~/lib/select-sync';
+import { Combo, type ComboOption } from '~/components/ui/Combo';
 import { effortOptionsFor, modelOptionsFor, withLiveModel } from '~/lib/engine-chain';
 
 const SELECT_MODEL =
-  'bg-purple-500/10 border border-purple-500/30 rounded px-1.5 py-0.5 text-[10px] font-mono '
-  + 'text-purple-200 focus:outline-none focus:border-purple-400/60 max-w-[110px]';
+  'flex items-center gap-1 bg-purple-500/10 border border-purple-500/30 rounded px-1.5 py-0.5 '
+  + 'text-[10px] font-mono text-purple-200 hover:border-purple-400/60 focus:outline-none max-w-[130px]';
 const SELECT_EFFORT =
-  'bg-amber-500/10 border border-amber-500/30 rounded px-1.5 py-0.5 text-[10px] font-mono '
-  + 'text-amber-200/90 focus:outline-none focus:border-amber-400/60';
+  'flex items-center gap-1 bg-amber-500/10 border border-amber-500/30 rounded px-1.5 py-0.5 '
+  + 'text-[10px] font-mono text-amber-200/90 hover:border-amber-400/60 focus:outline-none max-w-[110px]';
 
 export default function ModelEffortPickers(props: {
   conv: string;
@@ -48,45 +49,35 @@ export default function ModelEffortPickers(props: {
   // <option> the select would render some other model while the state
   // underneath is already correct (catalog not hydrated, unknown client,
   // a pinned id the catalog doesn't list).
-  const modelGroups = createMemo(() =>
-    withLiveModel(modelOptionsFor(props.client, props.provider, catalog()), props.model),
+  const modelOptions = createMemo<ComboOption[]>(() =>
+    withLiveModel(modelOptionsFor(props.client, props.provider, catalog()), props.model)
+      .flatMap((g) => g.items.map((m) => ({ id: m.id, label: m.label, group: g.group }))),
   );
-  const liveEfforts = createMemo(() => withLiveOption(effortOptionsFor(props.client, catalog()), props.effort));
+  const liveEfforts = createMemo<ComboOption[]>(() =>
+    withLiveOption(effortOptionsFor(props.client, catalog()), props.effort),
+  );
   const modelTitle = (): string =>
     `Model — applies from the next turn (${props.client === 'claude-code' ? props.provider : props.client})`;
 
   return (
     <div class="flex items-center gap-1 flex-shrink-0">
-      <select
-        ref={(el) => bindSelectValue(el, () => props.model, modelGroups)}
-        value={props.model}
-        onChange={(e) => chatStore.setConvModel(props.conv, e.currentTarget.value)}
-        title={modelTitle()}
+      <Combo
+        ariaLabel="Model"
         class={SELECT_MODEL}
-      >
-        <For each={modelGroups()}>
-          {(g) => (
-            g.group
-              ? (
-                <optgroup label={g.group}>
-                  <For each={g.items}>{(m) => <option value={m.id} selected={m.id === props.model}>{m.label}</option>}</For>
-                </optgroup>
-              )
-              : <For each={g.items}>{(m) => <option value={m.id} selected={m.id === props.model}>{m.label}</option>}</For>
-          )}
-        </For>
-      </select>
-      <select
-        ref={(el) => bindSelectValue(el, () => props.effort, liveEfforts)}
-        value={props.effort}
-        onChange={(e) => chatStore.setConvEffort(props.conv, e.currentTarget.value)}
-        title="Effort (reasoning depth) — applies from the next turn"
+        value={props.model}
+        options={modelOptions()}
+        onChange={(id) => chatStore.setConvModel(props.conv, id)}
+        title={modelTitle()}
+        placeholder={modelOptions().length ? '—' : 'loading…'}
+      />
+      <Combo
+        ariaLabel="Effort"
         class={SELECT_EFFORT}
-      >
-        <For each={liveEfforts()}>
-          {(e) => <option value={e.id} selected={e.id === props.effort}>{e.label}</option>}
-        </For>
-      </select>
+        value={props.effort}
+        options={liveEfforts()}
+        onChange={(id) => chatStore.setConvEffort(props.conv, id)}
+        title="Effort (reasoning depth) — applies from the next turn"
+      />
     </div>
   );
 }
