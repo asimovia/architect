@@ -44,6 +44,7 @@ const ALLOWED_EXACT = new Set<string>([
   'mc-initiative-group-by-phase',
   'mc-modules-pill',
   'mc-modules-collapsed',
+  'mc-links-tab',
   // Auth (per-browser tokens)
   'meshkore-tokens-v1',
   'meshcore-token', // legacy single-cluster token; tokens-v1 supersedes

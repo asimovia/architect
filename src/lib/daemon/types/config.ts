@@ -52,6 +52,85 @@ export interface CronTriggerResponse {
   status: string;
 }
 
+// ─── Jobs (jobs-and-links JL-1/JL-2) ────────────────────────────────
+//
+// A Job is a persisted command the DAEMON runs as its own child, so it
+// survives the browser (and the agent that started it). Distinct from a
+// Cron: crons are schedules, jobs are long-lived processes.
+//
+// Contract served by the daemon (JL-1):
+//   GET    /jobs                → { jobs: Job[] }
+//   POST   /jobs                → Job
+//   POST   /jobs/<id>/stop      → Job
+//   POST   /jobs/<id>/restart   → Job
+//   DELETE /jobs/<id>           → { deleted: true, id }
+//   WS event `jobs.updated`     → the cockpit refetches
+
+/** Runtime state of a job's process, as the daemon reports it
+ *  (`daemon/jobs.py`). `failed` means the last start attempt errored. */
+export type JobStatus = 'running' | 'stopped' | 'failed';
+
+/** One job, as `GET /jobs` renders it. Definition fields (id/name/
+ *  command/cwd/port/env_keys/notes) come from `.meshkore/public/jobs.yaml`;
+ *  runtime fields (status/pid/…) from the daemon's local runtime state,
+ *  which is why a job survives a daemon restart as `stopped` rather than
+ *  as a phantom `running`. */
+export interface Job {
+  id: string;
+  name: string;
+  command: string;
+  /** Relative to the project root; the daemon defaults it to `.`. */
+  cwd: string;
+  /** Declared at creation, not probed. */
+  port?: number | null;
+  /** Env var NAMES only — values never cross the wire. */
+  env_keys?: string[];
+  notes?: string | null;
+  status: JobStatus;
+  pid?: number | null;
+  started_at?: string | null;
+  stopped_at?: string | null;
+  /** Seconds since the current process started; null unless running. */
+  uptime_sec?: number | null;
+  exit_code?: number | null;
+  /** Path of the current run's log file on the daemon's machine. */
+  log?: string | null;
+  /** Re-adopted at daemon boot rather than started by this daemon. */
+  adopted?: boolean;
+  /** Why it last changed state ("created", "restart", "deleted", …). */
+  reason?: string | null;
+}
+
+export interface JobsListResponse {
+  version?: number;
+  jobs: Job[];
+  /** Daemon-computed count of `running` jobs. */
+  running?: number;
+  _errors?: string[];
+}
+
+/** POST /jobs body. `command` is the only hard requirement — the daemon
+ *  derives the id from `name` (slugified) and starts the job unless
+ *  `start: false`. */
+export interface JobCreateBody {
+  name?: string;
+  command: string;
+  cwd?: string;
+  port?: number;
+  env?: Record<string, string>;
+  notes?: string;
+  start?: boolean;
+}
+
+/** Every job mutation answers the same envelope: the flag, the id, and
+ *  the job's post-mutation view (absent after a delete). */
+export interface JobMutationResponse {
+  ok?: boolean;
+  id: string;
+  job?: Job;
+  deleted?: boolean;
+}
+
 // ─── master-copilot (CPL-2/CPL-4) — remote-control token ────────────
 //
 // Machine-level (one per daemon) operator credential. GET returns the

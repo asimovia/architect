@@ -12,7 +12,9 @@ import { createStore } from 'solid-js/store';
 import { log } from '~/lib/log';
 
 export type Tab = 'roadmap' | 'manage' | 'history' | 'diagrams';
-export type Zone = 'architect' | 'agents' | 'bookmarks' | 'crons' | 'links' | 'protocols' | 'diary' | 'config';
+export type Zone = 'architect' | 'agents' | 'crons' | 'jobs' | 'links' | 'protocols' | 'diary' | 'config';
+/** Tabs inside the Links zone (JL-3 — Bookmarks folded in as a tab). */
+export type LinksTab = 'internal' | 'bookmarks';
 export type RailMode = 'full' | 'short';
 export type WsTab = 'tasks' | 'context' | 'diagrams' | 'modules';
 export type ModulesPill = 'all' | 'work' | 'stb';
@@ -33,6 +35,8 @@ export interface UIStoreState {
   modulesPill: ModulesPill;
   /** Collapse the modules nav column to a vertical rail. */
   modulesCollapsed: boolean;
+  /** Active tab inside the Links zone (JL-3). */
+  linksTab: LinksTab;
 }
 
 // localStorage keys — KEEP IN SYNC with V80 monolith.
@@ -48,6 +52,7 @@ const KEYS = {
   initiativeGroupByPhase: 'mc-initiative-group-by-phase',
   modulesPill: 'mc-modules-pill',
   modulesCollapsed: 'mc-modules-collapsed',
+  linksTab: 'mc-links-tab',
 } as const;
 
 function readString<T extends string>(key: string, fallback: T, allowed: readonly T[]): T {
@@ -94,13 +99,14 @@ const initial: UIStoreState = {
   activeZone: readString<Zone>(KEYS.activeZone, 'architect', [
     'architect',
     'agents',
-    'bookmarks',
     'crons',
+    'jobs',
     'links',
     'protocols',
     'diary',
     'config',
   ]),
+  linksTab: readString<LinksTab>(KEYS.linksTab, 'internal', ['internal', 'bookmarks']),
   projectsRailMode: readString<RailMode>(KEYS.projectsRailMode, 'full', ['full', 'short']),
   projectsRailWidth: readInt(KEYS.projectsRailWidth, 240),
   chatRailWidth: readInt(KEYS.chatRailWidth, 220),
@@ -122,6 +128,11 @@ function setActiveTab(t: Tab): void {
 function setActiveZone(z: Zone): void {
   setState('activeZone', z);
   writeStr(KEYS.activeZone, z);
+}
+
+function setLinksTab(t: LinksTab): void {
+  setState('linksTab', t);
+  writeStr(KEYS.linksTab, t);
 }
 
 function setProjectsRailMode(m: RailMode): void {
@@ -177,6 +188,7 @@ export const uiStore = {
   state,
   setActiveTab,
   setActiveZone,
+  setLinksTab,
   setProjectsRailMode,
   setProjectsRailWidth,
   setChatRailWidth,

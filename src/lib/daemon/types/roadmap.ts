@@ -133,9 +133,26 @@ export interface LinksModule {
   prod?: LinksProd;
   repo?: LinksRepo;
 }
+/** JL-3/JL-4 — a curated project bookmark. Different in kind from a
+ *  module's operational links: docs, dashboards, the standard — things
+ *  a human wants to reach, not ports a process listens on. Served from
+ *  the same registry (`bookmarks:` inside links.yaml) and the same
+ *  `links.updated` event, so there is one file and one socket event. */
+export interface LinkBookmark {
+  /** Daemon-assigned (slug or `bm<N>`) — stable enough to key a list. */
+  id: string;
+  url: string;
+  /** Daemon falls back to the id when the entry declares no title. */
+  title: string;
+  tags?: string[];
+  notes?: string;
+}
 export interface LinksRegistry {
   version?: number;
   modules: LinksModule[];
+  /** Absent on a daemon that predates JL-4 — the tab then shows the
+   *  "how to declare these" empty state rather than an error. */
+  bookmarks?: LinkBookmark[];
 }
 
 export interface ProtocolSummary {

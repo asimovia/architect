@@ -1,6 +1,7 @@
 /** Header — V64 layout: logo + project plate · zone buttons + Config tab · daemon/cluster pills. */
 
 import { Show, createSignal } from 'solid-js';
+import { jobsStore, mountJobsFeed } from '~/state/jobs';
 import { daemonStore } from '~/state/daemon';
 import { activeLinkStatus, type LinkStatus } from '~/lib/connection-status';
 import { activeProject } from '~/state/projects';
@@ -83,9 +84,10 @@ function openAboutModal(): void {
 const ZONES: { id: Zone; label: string; title: string }[] = [
   { id: 'architect', label: 'Architect', title: 'Architect — project dashboard (modules · roadmap · chat)' },
   { id: 'agents',    label: 'Team',      title: 'Team — roster of members + who is working on what' },
-  { id: 'bookmarks', label: 'Bookmarks', title: 'Bookmarks — quick-access shelf' },
   { id: 'crons',     label: 'Crons',     title: 'Crons — scheduled jobs' },
-  { id: 'links',     label: 'Links',     title: 'Links — deployment registry' },
+  { id: 'jobs',      label: 'Jobs',      title: 'Jobs — processes the daemon is running right now' },
+  // JL-3 — Bookmarks is no longer a zone: it is a tab inside Links.
+  { id: 'links',     label: 'Links',     title: 'Links — deployment registry + bookmarks' },
   // Protocols moved 2026-06-19 into the Roadmap column's sub-tabs.
   { id: 'diary',     label: 'Diary',     title: 'Diary — chronological activity blog' },
   { id: 'config',    label: 'Config',    title: 'Config — cluster settings' },
@@ -96,8 +98,8 @@ function ZoneIcon(props: { id: Zone }) {
     <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
       <Show when={props.id === 'architect'}><path d="M3 7h18M3 12h18M3 17h13" /></Show>
       <Show when={props.id === 'agents'}><><circle cx="9" cy="8" r="3" /><circle cx="17" cy="11" r="2.5" /><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" /><path d="M13 20c0-2.2 1.8-4 4-4s4 1.8 4 4" /></></Show>
-      <Show when={props.id === 'bookmarks'}><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2v16z" /></Show>
       <Show when={props.id === 'crons'}><><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></></Show>
+      <Show when={props.id === 'jobs'}><><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M7 9l3 3-3 3" /><path d="M13 15h4" /></></Show>
       <Show when={props.id === 'links'}><><path d="M10 13a5 5 0 007.07 0l3-3a5 5 0 00-7.07-7.07l-1.5 1.5" /><path d="M14 11a5 5 0 00-7.07 0l-3 3a5 5 0 007.07 7.07l1.5-1.5" /></></Show>
       <Show when={props.id === 'protocols'}><><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="M9 12l2 2 4-4" /></></Show>
       <Show when={props.id === 'diary'}><><path d="M4 19.5A2.5 2.5 0 016.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" /></></Show>
@@ -110,6 +112,10 @@ export default function Header() {
   // control · clients & providers). Distinct from the per-project Config
   // zone tab — see GeneralConfigDrawer.
   const [genOpen, setGenOpen] = createSignal(false);
+  // JL-2 — one live /jobs feed for the whole cockpit, owned by the only
+  // component that is mounted in every zone. The Jobs badge below and
+  // the Jobs panel both read `jobsStore`, so they cannot disagree.
+  mountJobsFeed();
   return (
     <header class="sticky top-0 z-40 bg-gray-950/95 backdrop-blur-xl border-b border-gray-800/60 shadow-sm">
       <div class="h-12 flex items-center gap-2 px-3">
@@ -215,6 +221,11 @@ function ConnectionBanner() {
 
 function ZoneButton(props: { zone: typeof ZONES[number] }) {
   const active = () => uiStore.state.activeZone === props.zone.id;
+  // JL-2 — "Jobs (N)": N is the number of processes the daemon has
+  // running right now, live over the `jobs.updated` socket event. Hidden
+  // at zero so the header stays quiet when nothing is running.
+  const badge = () =>
+    props.zone.id === 'jobs' && jobsStore.runningCount() > 0 ? jobsStore.runningCount() : null;
   return (
     <button
       type="button"
@@ -228,6 +239,18 @@ function ZoneButton(props: { zone: typeof ZONES[number] }) {
     >
       <ZoneIcon id={props.zone.id} />
       <span class="hidden lg:inline">{props.zone.label}</span>
+      <Show when={badge() !== null}>
+        <span
+          class={`font-mono text-[10px] leading-none px-1.5 py-0.5 rounded-full border ${
+            active()
+              ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-200'
+              : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+          }`}
+          title={`${badge()} job(s) running`}
+        >
+          {badge()}
+        </span>
+      </Show>
     </button>
   );
 }

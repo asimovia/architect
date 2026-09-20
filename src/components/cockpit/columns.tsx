@@ -18,8 +18,8 @@ import ChatPanel from '~/components/ChatPanel';
 import ChatRail from '~/components/ChatRail';
 import AgentsPanel from '~/components/zones/AgentsPanel';
 import ConfigPanel from '~/components/zones/ConfigPanel';
-import BookmarksPanel from '~/components/zones/BookmarksPanel';
 import CronsPanel from '~/components/zones/CronsPanel';
+import JobsPanel from '~/components/zones/JobsPanel';
 import LinksPanel from '~/components/zones/LinksPanel';
 import ProtocolsPanel from '~/components/zones/ProtocolsPanel';
 import DiaryPanel from '~/components/zones/DiaryPanel';
@@ -47,7 +47,7 @@ const MODULES_EXPAND_PX = 220;
  *
  * 2026-06-19 (2-col): only two panels — `roadmap` and `agents`. The
  * roadmap slot swaps its content for a migrated top-tab zone
- * (Bookmarks, Crons, …) when the active zone isn't `architect`; chat
+ * (Crons, Jobs, Links, …) when the active zone isn't `architect`; chat
  * stays put in its own slot.
  */
 type SlotProps = {
@@ -244,10 +244,10 @@ function SubTab(props: {
 
 function ZoneView(props: { zone: Zone }) {
   return (
-    <Switch fallback={<BookmarksPanel />}>
+    <Switch fallback={<LinksPanel />}>
       <Match when={props.zone === 'agents'}><AgentsPanel /></Match>
-      <Match when={props.zone === 'bookmarks'}><BookmarksPanel /></Match>
       <Match when={props.zone === 'crons'}><CronsPanel /></Match>
+      <Match when={props.zone === 'jobs'}><JobsPanel /></Match>
       <Match when={props.zone === 'links'}><LinksPanel /></Match>
       <Match when={props.zone === 'protocols'}><ProtocolsPanel /></Match>
       <Match when={props.zone === 'diary'}><DiaryPanel /></Match>

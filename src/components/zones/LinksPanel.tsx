@@ -1,5 +1,5 @@
 /**
- * LinksPanel — V86t.
+ * LinksPanel — V86t · JL-3 (two tabs).
  *
  * Standard §13 deployment registry, served by the daemon at /links
  * (reads + watches `.meshkore/public/links.yaml`, broadcasts
@@ -15,15 +15,25 @@
  *
  * The panel listens for `links.updated` so changes to links.yaml
  * (operator typing, code agent writing) show up without refresh.
+ *
+ * JL-3 — Bookmarks folded in as the SECOND tab of this zone. It used to
+ * be its own header button pointing at a "coming with V44" stub that
+ * never shipped: two buttons for almost the same thing, one of them
+ * empty. The two tabs are deliberately different in kind:
+ *   - Internal: operational deployment registry (ports, prod URLs, run
+ *     commands) — one entry per module, standard §13.
+ *   - Bookmarks: curated reading — docs, dashboards, the standard —
+ *     served from `bookmarks:` in the SAME links.yaml (JL-4), so there
+ *     is one file, one registry and one `links.updated` event.
  */
 
 import { For, Show, createEffect, createMemo, createResource, createSignal, onCleanup } from 'solid-js';
 import { daemonStore } from '~/state/daemon';
 import { allModules, clusterInfo } from '~/state/server';
-import { uiStore } from '~/state/ui';
+import { uiStore, type LinksTab } from '~/state/ui';
 import { log } from '~/lib/log';
 import { CopyButton } from '~/components/ui/CopyButton';
-import type { LinksModule, LinksRegistry } from '~/lib/daemon-client';
+import type { LinkBookmark, LinksModule, LinksRegistry } from '~/lib/daemon-client';
 
 export default function LinksPanel() {
   const [reloadKey, setReloadKey] = createSignal(0);
@@ -57,6 +67,10 @@ export default function LinksPanel() {
   });
 
   const modules = createMemo<LinksModule[]>(() => registry()?.modules ?? []);
+  const bookmarks = createMemo<LinkBookmark[]>(() => registry()?.bookmarks ?? []);
+  const tab = () => uiStore.state.linksTab;
+  const count = () => (tab() === 'internal' ? modules().length : bookmarks().length);
+  const unit = () => (tab() === 'internal' ? 'module' : 'bookmark');
 
   return (
     <div class="flex-1 min-h-0 flex flex-col">
@@ -70,13 +84,18 @@ export default function LinksPanel() {
         <div>
           <h1 class="text-base font-semibold text-gray-100">Links</h1>
           <p class="text-xs text-gray-500">
-            Deployment registry · <code class="font-mono text-sky-300/80">.meshkore/public/links.yaml</code>
+            {tab() === 'internal' ? 'Deployment registry' : 'Curated project reading'} ·{' '}
+            <code class="font-mono text-sky-300/80">.meshkore/public/links.yaml</code>
           </p>
         </div>
         <div class="ml-auto flex items-center gap-2">
-          <Show when={modules().length > 0}>
+          <div class="flex items-center gap-1 mr-1" role="tablist" aria-label="Links tabs">
+            <TabButton id="internal" label="Internal" active={tab()} />
+            <TabButton id="bookmarks" label="Bookmarks" active={tab()} />
+          </div>
+          <Show when={count() > 0}>
             <span class="text-[10px] font-mono uppercase tracking-wider text-gray-500">
-              {modules().length} module{modules().length === 1 ? '' : 's'}
+              {count()} {unit()}{count() === 1 ? '' : 's'}
             </span>
           </Show>
           <button
@@ -94,11 +113,8 @@ export default function LinksPanel() {
           <Show when={registry.error}>
             <ErrorNotice error={String(registry.error)} />
           </Show>
-          <Show when={registry.loading && modules().length === 0}>
+          <Show when={registry.loading && !registry()}>
             <p class="text-sm text-gray-500">Loading links…</p>
-          </Show>
-          <Show when={!registry.loading && modules().length === 0 && !registry.error}>
-            <EmptyNotice />
           </Show>
 
           {/* V107.18 — when the registry is empty AND the cluster has
@@ -109,13 +125,105 @@ export default function LinksPanel() {
               not `meshkore-web`. Falls back to a generic `<your-module>`
               placeholder only when the cluster has no modules either. */}
 
-          <ul class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-            <For each={modules()}>
-              {(m) => <ModuleCard mod={m} />}
-            </For>
-          </ul>
+          <Show when={tab() === 'internal'}>
+            <Show when={!registry.loading && modules().length === 0 && !registry.error}>
+              <EmptyNotice />
+            </Show>
+            <ul class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+              <For each={modules()}>
+                {(m) => <ModuleCard mod={m} />}
+              </For>
+            </ul>
+          </Show>
+
+          <Show when={tab() === 'bookmarks'}>
+            <Show when={!registry.loading && bookmarks().length === 0 && !registry.error}>
+              <BookmarksEmptyNotice />
+            </Show>
+            <ul class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+              <For each={bookmarks()}>
+                {(b) => <BookmarkCard bookmark={b} />}
+              </For>
+            </ul>
+          </Show>
         </div>
       </div>
+    </div>
+  );
+}
+
+function TabButton(props: { id: LinksTab; label: string; active: LinksTab }) {
+  const on = () => props.active === props.id;
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={on()}
+      onClick={() => uiStore.setLinksTab(props.id)}
+      class={`px-2.5 py-1 rounded-md text-[11px] font-medium border transition-colors ${
+        on()
+          ? 'bg-sky-500/15 border-sky-500/40 text-sky-200'
+          : 'border-transparent text-gray-500 hover:text-gray-200 hover:border-gray-700'
+      }`}
+    >
+      {props.label}
+    </button>
+  );
+}
+
+/** One curated bookmark. Flat on purpose — a bookmark is a title, a
+ *  destination and (optionally) why it is worth opening. */
+function BookmarkCard(props: { bookmark: LinkBookmark }) {
+  const href = () => props.bookmark.url?.trim() || null;
+  return (
+    <li class="rounded-lg border border-gray-800/60 bg-gray-900/30 px-3 py-2.5 flex flex-col gap-1.5">
+      <header class="flex items-center gap-2 min-w-0">
+        <span class="text-[12px] font-medium text-gray-100 truncate">
+          {props.bookmark.title || href()}
+        </span>
+        <For each={props.bookmark.tags ?? []}>
+          {(t) => (
+            <span class="font-mono text-[9px] text-gray-500 uppercase tracking-wider shrink-0">{t}</span>
+          )}
+        </For>
+      </header>
+
+      <Show when={href()}>
+        <a
+          href={href()!}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="block px-2 py-1 rounded bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 text-sky-200 font-mono text-[11px] truncate transition-colors"
+          title={href()!}
+        >
+          ↗ {href()}
+        </a>
+      </Show>
+
+      <Show when={props.bookmark.notes}>
+        <p class="text-[11px] text-gray-500 leading-snug">{props.bookmark.notes}</p>
+      </Show>
+    </li>
+  );
+}
+
+function BookmarksEmptyNotice() {
+  return (
+    <div class="rounded-lg border border-gray-800/70 bg-gray-900/40 px-5 py-6 text-sm text-gray-400">
+      <p class="mb-2">No bookmarks yet.</p>
+      <p class="text-[12px] text-gray-500 mb-3">
+        Bookmarks are the project's curated reading — docs, dashboards, the standard — as opposed to
+        the operational URLs on the <strong class="text-gray-400">Internal</strong> tab. They live in
+        the same <code class="font-mono text-sky-300/80">.meshkore/public/links.yaml</code>, under a
+        top-level <code class="font-mono text-sky-300/80">bookmarks:</code> block:
+      </p>
+      <pre class="text-[11px] font-mono text-gray-300 bg-gray-950/70 border border-gray-800/70 rounded-md px-3 py-2 whitespace-pre-wrap">{`bookmarks:
+  - title: The MeshKore standard
+    url: https://meshkore.com/standard
+    notes: The cross-cluster contract
+  - title: Cloudflare dashboard
+    url: https://dash.cloudflare.com
+    tags: [ops]`}</pre>
     </div>
   );
 }

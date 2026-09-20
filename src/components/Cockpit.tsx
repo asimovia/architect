@@ -9,7 +9,7 @@
  * Context / Diagrams). The center column owns its own agents rail +
  * chat thread. Both inner splitters are drag-resizable.
  *
- * Migrated zones (bookmarks, crons, links, protocols, diary, config)
+ * Migrated zones (crons, jobs, links, protocols, diary, config)
  * replace the cockpit body with their own panel via `ZoneView`.
  */
 
@@ -35,7 +35,27 @@ import { nav } from '~/state/nav';
 import { uiStore, type Zone } from '~/state/ui';
 import { layoutStore } from '~/state/layout';
 
-const HASH_ZONES: readonly Zone[] = ['architect', 'agents', 'bookmarks', 'crons', 'links', 'protocols', 'diary', 'config'];
+const HASH_ZONES: readonly Zone[] = ['architect', 'agents', 'crons', 'jobs', 'links', 'protocols', 'diary', 'config'];
+
+/**
+ * Retired hashes that must keep resolving (JL-3). `#bookmarks` was its
+ * own zone until Bookmarks became a tab inside Links; anything the
+ * operator (or a doc, or a chat message) bookmarked still lands on the
+ * right surface instead of a dead hash.
+ */
+const HASH_ALIASES: Record<string, { zone: Zone; apply?: () => void }> = {
+  bookmarks: { zone: 'links', apply: () => uiStore.setLinksTab('bookmarks') },
+};
+
+/** Resolve a raw hash to a zone, honouring the retired-hash aliases. */
+function zoneFromHash(raw: string): Zone | null {
+  const h = raw.replace(/^#/, '');
+  if ((HASH_ZONES as readonly string[]).includes(h)) return h as Zone;
+  const alias = HASH_ALIASES[h];
+  if (!alias) return null;
+  alias.apply?.();
+  return alias.zone;
+}
 
 export default function Cockpit(props: {
   selectedModule: string | null;
@@ -60,11 +80,11 @@ export default function Cockpit(props: {
   // Hash deep-link — read `#zone` on mount + popstate, write it back
   // when the zone changes.
   onMount(() => {
-    const fromHash = window.location.hash.replace(/^#/, '') as Zone;
-    if (HASH_ZONES.includes(fromHash) && fromHash !== zone()) uiStore.setActiveZone(fromHash);
+    const fromHash = zoneFromHash(window.location.hash);
+    if (fromHash && fromHash !== zone()) uiStore.setActiveZone(fromHash);
     const onPop = () => {
-      const z = window.location.hash.replace(/^#/, '') as Zone;
-      if (HASH_ZONES.includes(z) && z !== uiStore.state.activeZone) uiStore.setActiveZone(z);
+      const z = zoneFromHash(window.location.hash);
+      if (z && z !== uiStore.state.activeZone) uiStore.setActiveZone(z);
     };
     window.addEventListener('popstate', onPop);
     window.addEventListener('hashchange', onPop);
@@ -141,7 +161,7 @@ export default function Cockpit(props: {
                  *  content]. The left slot is the flexible `1fr` track;
                  *  the right slot is the fixed `--col-side` track that
                  *  the single `col-main` splitter resizes. Migrated
-                 *  top-tab zones (Bookmarks, Crons, …) replace the
+                 *  top-tab zones (Crons, Jobs, Links, …) replace the
                  *  roadmap column's content while chat stays put. */}
                 <Slot id={layoutStore.order()[0] ?? 'roadmap'}
                   selectedModule={props.selectedModule}

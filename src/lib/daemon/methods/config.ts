@@ -10,6 +10,9 @@ import type {
   CredentialsListResponse,
   CronListResponse,
   CronTriggerResponse,
+  JobCreateBody,
+  JobMutationResponse,
+  JobsListResponse,
   ProvidersConfigPatch,
   ProvidersConfigResponse,
   RemoteTokenResponse,
@@ -78,6 +81,52 @@ export class ConfigMethods extends SystemMethods {
   ): Promise<Result<{ ok: boolean; id: string; cancelled: boolean }>> {
     return this.request<{ ok: boolean; id: string; cancelled: boolean }>(
       'POST', `/cron/${encodeURIComponent(id)}/cancel`, {}, signal,
+    );
+  }
+
+  // ── Jobs (jobs-and-links JL-1) ────────────────────────────────────
+  //
+  // Long-lived processes owned by the DAEMON, not by the browser. Any
+  // agent can create one; the cockpit's Jobs zone lists + controls them.
+  // A daemon older than JL-1 404s every call here — callers treat that
+  // as "no jobs surface yet", not as an error banner.
+
+  async jobs(signal?: AbortSignal): Promise<Result<JobsListResponse>> {
+    return this.request<JobsListResponse>('GET', '/jobs', undefined, signal);
+  }
+
+  /** POST /jobs — define a job and start it (201). 409 when the id,
+   *  derived from `name`, already exists. */
+  async jobCreate(body: JobCreateBody, signal?: AbortSignal): Promise<Result<JobMutationResponse>> {
+    return this.request<JobMutationResponse>('POST', '/jobs', body, signal);
+  }
+
+  /** POST /jobs/<id>/start — start a defined job that is not running. */
+  async jobStart(id: string, signal?: AbortSignal): Promise<Result<JobMutationResponse>> {
+    return this.request<JobMutationResponse>(
+      'POST', `/jobs/${encodeURIComponent(id)}/start`, {}, signal,
+    );
+  }
+
+  /** POST /jobs/<id>/stop — SIGTERM the process GROUP (a `npm run dev`
+   *  shell's real server is a grandchild); the definition stays. */
+  async jobStop(id: string, signal?: AbortSignal): Promise<Result<JobMutationResponse>> {
+    return this.request<JobMutationResponse>(
+      'POST', `/jobs/${encodeURIComponent(id)}/stop`, {}, signal,
+    );
+  }
+
+  /** POST /jobs/<id>/restart — stop (if running) then start again. */
+  async jobRestart(id: string, signal?: AbortSignal): Promise<Result<JobMutationResponse>> {
+    return this.request<JobMutationResponse>(
+      'POST', `/jobs/${encodeURIComponent(id)}/restart`, {}, signal,
+    );
+  }
+
+  /** DELETE /jobs/<id> — stop the process tree AND drop the definition. */
+  async jobDelete(id: string, signal?: AbortSignal): Promise<Result<JobMutationResponse>> {
+    return this.request<JobMutationResponse>(
+      'DELETE', `/jobs/${encodeURIComponent(id)}`, undefined, signal,
     );
   }
 
