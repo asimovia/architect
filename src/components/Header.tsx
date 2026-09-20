@@ -1,4 +1,4 @@
-/** Header — V64 layout: logo + project plate · zone buttons + Config tab · daemon/cluster pills. */
+/** Header — V64 layout: logo + project plate · zone buttons + Config tab · version pill. */
 
 import { Show, createSignal } from 'solid-js';
 import { jobsStore, mountJobsFeed } from '~/state/jobs';
@@ -8,6 +8,8 @@ import { activeProject } from '~/state/projects';
 import { uiStore, type Zone } from '~/state/ui';
 import { mcModal } from '~/lib/modal';
 import { useTlsDaemon, LOOPBACK_HOSTNAME } from '~/lib/transport';
+import { isDaemonBehind, EXPECTED_DAEMON_VERSION } from '~/lib/version';
+import { cockpitOutdated, COCKPIT_COMMIT } from '~/lib/cockpit-version';
 import ThemePicker from '~/components/ThemePicker';
 import GeneralConfigDrawer from '~/components/GeneralConfigDrawer';
 
@@ -30,7 +32,7 @@ function openAboutModal(): void {
     subtitle: 'Operator cockpit for MeshKore clusters',
     body: () => (
       <div class="flex flex-col gap-3.5 py-2">
-        <div class="flex items-center gap-2.5">
+        <div class="flex items-center gap-2.5 flex-wrap">
           <span class="font-mono text-[11px] text-gray-500 tracking-widest uppercase">build</span>
           <span class="font-mono text-base text-emerald-400 font-bold">{BUILD_VERSION}</span>
           <Show when={BUILD_COMMIT}>
@@ -39,13 +41,22 @@ function openAboutModal(): void {
           <Show when={BUILD_DATE}>
             <span class="font-mono text-[10px] text-gray-600">· {BUILD_DATE.slice(0, 10)}</span>
           </Show>
+          {/* The pill's amber half, spelled out: is THIS tab the deployed build? */}
+          <span class={`font-mono text-[10px] ${cockpitOutdated() ? 'text-amber-300' : 'text-gray-500'}`}>
+            {cockpitOutdated() ? '· newer build deployed — reload' : '· up to date'}
+          </span>
         </div>
         <div class="h-px bg-gray-700/30" />
         <div class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[12px]">
           <span class="font-mono text-[10px] text-gray-500 uppercase tracking-wider self-center">Cluster</span>
           <span class="text-gray-200">{cluster}</span>
           <span class="font-mono text-[10px] text-gray-500 uppercase tracking-wider self-center">Daemon</span>
-          <span class="text-gray-200 font-mono text-[11px]">{daemonV}</span>
+          <span class="text-gray-200 font-mono text-[11px]">
+            {daemonV}
+            <span class={`ml-2 ${isDaemonBehind(daemonV) ? 'text-amber-300' : 'text-gray-500'}`}>
+              {isDaemonBehind(daemonV) ? `· behind ${EXPECTED_DAEMON_VERSION}` : '· up to date'}
+            </span>
+          </span>
           <span class="font-mono text-[10px] text-gray-500 uppercase tracking-wider self-center">Endpoint</span>
           <span class="text-gray-200 font-mono text-[11px]">
             {port ? `${tls ? `https://${LOOPBACK_HOSTNAME}` : 'http://localhost'}:${port}` : '—'}
@@ -154,7 +165,7 @@ export default function Header() {
             in the per-project Config zone tab. Sits beside the theme
             picker because both are cross-project, browser/machine-scoped. */}
         <div class="flex items-center gap-1.5 flex-shrink-0">
-          <DaemonPill />
+          <VersionPill />
           <button
             type="button"
             onClick={() => setGenOpen(true)}
@@ -296,35 +307,61 @@ function ProjectPlate() {
   );
 }
 
-function DaemonPill() {
+/**
+ * VersionPill — the header's "are we up to date?" box.
+ *
+ * One line, two versions: the DAEMON this cockpit talks to and the
+ * COCKPIT bundle this tab is running. Operator ask (2026-09-21): the pill
+ * read `daemon · py-1.35.26` and said nothing about the cockpit itself,
+ * so a tab left open for a day looked identical to a freshly deployed one.
+ *
+ * Each half turns amber when it is the stale one — the daemon when it is
+ * behind the version this bundle expects, the cockpit when /health.json
+ * reports a newer commit than the one we were built with. Both already
+ * raise their own banner; this is the at-a-glance version of the same
+ * two facts. The DOT keeps meaning connection state and nothing else —
+ * conflating the two is what made this pill lie before.
+ *
+ * Everything else (cluster, endpoint, TLS, build date) lives in the About
+ * modal, one click away on the pill itself.
+ */
+function VersionPill() {
   const status = () => activeLinkStatus();
   const phase = () => daemonStore.state.phase;
-  const version = () => daemonStore.state.health?.version;
-  // When healthy: show "daemon · <version>" so the operator can spot
-  // auto-update bumps at a glance. Degraded states say what is wrong —
-  // reading only `phase` (which stays `connected` through reconnecting
-  // and fatal) is what made the pill lie.
-  const label = () => {
+  const daemonV = () => daemonStore.state.health?.version ?? '';
+  const daemonStale = () => isDaemonBehind(daemonV());
+  const cockpitStale = () => cockpitOutdated();
+  const cockpitV = () => (COCKPIT_COMMIT && COCKPIT_COMMIT !== 'unknown' ? COCKPIT_COMMIT.slice(0, 7) : 'dev');
+  // Degraded states say what is wrong instead of a version — reading only
+  // `phase` (which stays `connected` through reconnecting and fatal) is
+  // what made the pill lie in the first place.
+  const degraded = (): string | null => {
     switch (status()) {
-      case 'connected': {
-        const v = version();
-        return v ? `daemon · ${v}` : 'daemon';
-      }
-      case 'reconnecting':
-        return phase() === 'connected' ? 'reconnecting' : phase();
-      case 'paused':
-        return 'paused';
-      default:
-        return phase();
+      case 'connected': return null;
+      case 'reconnecting': return phase() === 'connected' ? 'reconnecting' : phase();
+      case 'paused': return 'paused';
+      default: return phase();
     }
   };
+  const title = () => [
+    LINK_TITLE[status()],
+    `daemon ${daemonV() || '—'}${daemonStale() ? ` — behind ${EXPECTED_DAEMON_VERSION}, update it` : ' — up to date'}`,
+    `cockpit ${cockpitV()}${cockpitStale() ? ' — a newer build is deployed, reload' : ' — up to date'}`,
+    'click for build details',
+  ].join('\n');
   return (
-    <span
-      class={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full border text-[10px] font-mono uppercase tracking-wider ${LINK_PILL[status()]}`}
-      title={LINK_TITLE[status()]}
+    <button
+      type="button"
+      onClick={openAboutModal}
+      class={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full border text-[10px] font-mono tracking-wide ${LINK_PILL[status()]}`}
+      title={title()}
     >
       <span class={`w-1.5 h-1.5 rounded-full ${LINK_DOT[status()]}`} />
-      {label()}
-    </span>
+      <Show when={!degraded()} fallback={<span class="uppercase">{degraded()}</span>}>
+        <span classList={{ 'text-amber-300': daemonStale() }}>{daemonV() || 'daemon'}</span>
+        <span class="text-gray-600">·</span>
+        <span classList={{ 'text-amber-300': cockpitStale() }}>arch {cockpitV()}</span>
+      </Show>
+    </button>
   );
 }
