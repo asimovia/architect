@@ -147,7 +147,14 @@ export async function loadConvMessagesPage(
     for (const raw of res.data.messages) {
       const ev = raw as DaemonEvent;
       const t = typeof ev.type === 'string' ? ev.type : '';
-      if (t !== 'chat.user' && t !== 'chat.assistant' && t !== 'chat.assistant.final' && t !== 'chat.cancelled') {
+      // REL1 — `chat.error` is in this list because the FIRST page is the
+      // one the operator reads: a turn that died has to explain itself
+      // when the thread is reopened, not only while the tab was watching.
+      // (`paging.historyMsg` covers the older pages.)
+      if (
+        t !== 'chat.user' && t !== 'chat.assistant' && t !== 'chat.assistant.final'
+        && t !== 'chat.cancelled' && t !== 'chat.error'
+      ) {
         continue;
       }
       // Older snapshots emit `chat.assistant` for finalised text; map it
