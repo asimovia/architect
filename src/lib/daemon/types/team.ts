@@ -105,6 +105,28 @@ export interface TeamMember {
   instances?: number;
 }
 
+/** TMR3 — where a save landed. The daemon answers every PATCH with the
+ *  live instances of the member: `convs` took the change already (their
+ *  sidecar was re-stamped), `busy` are mid-turn and will run it on their
+ *  next message — the process in flight keeps the argv it launched with. */
+export interface TeamApplied {
+  convs: string[];
+  busy: string[];
+  engine_changed: boolean;
+  profile_changed: boolean;
+}
+
+/** TMR2 — DELETE /team/<id>. Deleting a member is a change to the TEAM:
+ *  `rewired_members` had the deleted id in their `delegates_to` and were
+ *  rewritten; `unbound_convs` were instances of it and now run unbound
+ *  (dials intact) instead of 400-ing on every turn. */
+export interface TeamDeleteResult {
+  ok: boolean;
+  deleted: string;
+  rewired_members?: string[];
+  unbound_convs?: string[];
+}
+
 /** Full member incl. the init-prompt markdown body (GET /team/<id>). */
 export interface TeamMemberDetail extends TeamMember {
   body: string;
@@ -112,6 +134,8 @@ export interface TeamMemberDetail extends TeamMember {
    *  external AND the GET was cockpit-authed. Kept in memory only —
    *  never persisted to localStorage. */
   token?: string;
+  /** TMR3 — present on the response to a PATCH, never on a GET. */
+  applied?: TeamApplied;
 }
 
 /** POST /team — the final shape the operator confirms in the dialog.

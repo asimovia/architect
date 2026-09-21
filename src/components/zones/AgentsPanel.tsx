@@ -17,8 +17,10 @@ import type { TeamMember } from '~/lib/daemon-client';
 import { daemonStore } from '~/state/daemon';
 import { teamStore } from '~/state/team';
 import { modelLabel } from '~/lib/models';
+import { deletedText } from '~/lib/team-errors';
 import NewMemberDialog from '~/components/team/NewMemberDialog';
 import MemberDetailPanel from '~/components/team/MemberDetailPanel';
+import { ConfirmButtons } from '~/components/ui/ConfirmButtons';
 
 /** First paragraph of the init prompt, trimmed to ~120 chars — the
  *  card's one-line mission (ATM3). Strips a leading `# Heading`. */
@@ -36,6 +38,37 @@ function missionLine(body: string | null | undefined): string {
 export default function AgentsPanel() {
   const [newMemberOpen, setNewMemberOpen] = createSignal(false);
   const [detailId, setDetailId] = createSignal<string | null>(null);
+  // TMR4 — what the last roster operation did, in one line. A create, a
+  // duplicate or a delete that closed a circle (who stopped delegating to
+  // the deleted member, which open agents kept running) has consequences
+  // the grid alone cannot show.
+  const [notice, setNotice] = createSignal<string | null>(null);
+  const [problem, setProblem] = createSignal<string | null>(null);
+
+  const say = (text: string | null): void => {
+    setProblem(null);
+    if (!text) return;
+    setNotice(text);
+    setTimeout(() => { if (notice() === text) setNotice(null); }, 8000);
+  };
+
+  const duplicate = async (id: string): Promise<void> => {
+    const c = daemonStore.state.client;
+    if (!c) return;
+    const res = await teamStore.duplicate(c, id);
+    if (res.ok) { say(`Duplicated as “${res.member.name}”.`); return; }
+    setNotice(null);
+    setProblem(res.error ?? `Duplicate failed (HTTP ${res.status}).`);
+  };
+
+  const remove = async (id: string): Promise<void> => {
+    const c = daemonStore.state.client;
+    if (!c) return;
+    const res = await teamStore.remove(c, id);
+    if (res.ok) { say(deletedText(res.result) ?? 'Member deleted.'); return; }
+    setNotice(null);
+    setProblem(res.error ?? `Delete failed (HTTP ${res.status}).`);
+  };
 
   return (
     <section class="zone-host p-4 overflow-y-auto">
@@ -56,6 +89,17 @@ export default function AgentsPanel() {
         >+ New member</button>
       </header>
 
+      <Show when={problem()}>
+        <div class="mb-3 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-[12px] text-red-200">
+          {problem()}
+        </div>
+      </Show>
+      <Show when={notice()}>
+        <div class="mb-3 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[12px] text-emerald-200">
+          {notice()}
+        </div>
+      </Show>
+
       {/* Roster grid */}
       <Show
         when={teamStore.state.list.length > 0}
@@ -74,7 +118,8 @@ export default function AgentsPanel() {
                 member={m}
                 highlight={teamStore.state.recentlyCreated === m.id}
                 onOpen={() => setDetailId(m.id)}
-                onDelete={() => setDetailId(m.id)}
+                onDuplicate={() => { void duplicate(m.id); }}
+                onDelete={() => { void remove(m.id); }}
               />
             )}
           </For>
@@ -83,13 +128,17 @@ export default function AgentsPanel() {
 
       {/* Dialogs */}
       <Show when={newMemberOpen()}>
-        <NewMemberDialog onClose={() => setNewMemberOpen(false)} />
+        <NewMemberDialog
+          onClose={() => setNewMemberOpen(false)}
+          onCreated={(id) => say(`“${teamStore.get(id)?.name ?? id}” created — it is on the roster below.`)}
+        />
       </Show>
       <Show when={detailId()}>
         <MemberDetailPanel
           memberId={detailId()!}
           onClose={() => setDetailId(null)}
-          onDeleted={() => setDetailId(null)}
+          onDeleted={(info) => { setDetailId(null); say(info ?? 'Member deleted.'); }}
+          onDuplicated={(id) => { setDetailId(null); say(`Duplicated as “${teamStore.get(id)?.name ?? id}”.`); }}
         />
       </Show>
     </section>
@@ -100,6 +149,7 @@ function MemberCard(props: {
   member: TeamMember;
   highlight: boolean;
   onOpen: () => void;
+  onDuplicate: () => void;
   onDelete: () => void;
 }) {
   const m = () => props.member;
@@ -172,19 +222,48 @@ function MemberCard(props: {
       <p class="text-[11px] text-gray-500 mt-2 leading-snug min-h-[2.4em]">
         {body.loading ? '' : (missionLine(body()) || 'No mission set.')}
       </p>
-      {/* Delete (hidden when required) */}
-      <Show when={!m().required}>
+      {/* TMR4 — card actions. Duplicate is always available (the copy is
+          born a deletable internal profile whatever the original is);
+          delete is hidden on a required member and arms in place — no
+          native confirm() in this codebase, and no detour through the
+          editor just to remove a card. */}
+      <div
+        class="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+        onClick={(e) => e.stopPropagation()}
+      >
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); props.onDelete(); }}
-          title="Manage / delete this member"
-          class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 inline-flex items-center justify-center w-6 h-6 rounded text-gray-500 hover:text-red-300 border border-transparent hover:border-red-500/40 hover:bg-red-500/5 transition-all"
+          onClick={(e) => { e.stopPropagation(); props.onDuplicate(); }}
+          title="Duplicate this member — full card under a new name"
+          aria-label={`Duplicate ${m().name}`}
+          class="inline-flex items-center justify-center w-6 h-6 rounded text-gray-500 hover:text-emerald-300 border border-transparent hover:border-emerald-500/40 hover:bg-emerald-500/5 transition-all"
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
+            <rect x="9" y="9" width="12" height="12" rx="2" />
+            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
           </svg>
         </button>
-      </Show>
+        <Show when={!m().required}>
+          <ConfirmButtons
+            question="Delete?"
+            confirmLabel="Yes"
+            onConfirm={props.onDelete}
+            trigger={(arm) => (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); arm(); }}
+                title="Delete this member"
+                aria-label={`Delete ${m().name}`}
+                class="inline-flex items-center justify-center w-6 h-6 rounded text-gray-500 hover:text-red-300 border border-transparent hover:border-red-500/40 hover:bg-red-500/5 transition-all"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
+                </svg>
+              </button>
+            )}
+          />
+        </Show>
+      </div>
     </div>
   );
 }

@@ -22,9 +22,12 @@
 import { createStore } from 'solid-js/store';
 import { log } from '~/lib/log';
 import { captureClusterEpoch, isCurrentEpoch } from '~/lib/swap-guard';
+import { teamErrorText } from '~/lib/team-errors';
 import type {
   DaemonClient,
   DaemonEvent,
+  TeamApplied,
+  TeamDeleteResult,
   TeamMember,
   TeamMemberDetail,
   TeamCreateBody,
@@ -152,15 +155,40 @@ async function create(
 ): Promise<{ ok: true; member: TeamMember } | { ok: false; status: number; error?: string }> {
   const res = await client.teamCreate(body);
   if (!res.ok) {
-    return { ok: false, status: res.status, error: res.body };
+    // TMR4 — the daemon says WHY (an id it could not mint, a model the
+    // client does not accept); `HTTP 400` alone sent the operator back
+    // to the form with nothing to change.
+    return { ok: false, status: res.status, error: teamErrorText(res.status, res.body) };
   }
   // Optimistic insert so the card shows immediately; the team.created
   // WS event will re-hydrate the authoritative list right after.
-  setState('list', (prev) => sortByPinned([...prev.filter((m) => m.id !== res.data.id), res.data]));
-  setState('recentlyCreated', res.data.id);
+  insertOptimistic(res.data);
+  return { ok: true, member: res.data };
+}
+
+/** Put a freshly created member on the roster immediately and mark it as
+ *  new (the card rings emerald until the highlight expires). The
+ *  authoritative list arrives right after, via the team.created event. */
+function insertOptimistic(member: TeamMember): void {
+  setState('list', (prev) => sortByPinned([...prev.filter((m) => m.id !== member.id), member]));
+  setState('recentlyCreated', member.id);
   setTimeout(() => {
-    if (state.recentlyCreated === res.data.id) setState('recentlyCreated', null);
-  }, 4000);
+    if (state.recentlyCreated === member.id) setState('recentlyCreated', null);
+  }, 8000);
+}
+
+/** TMR3 — POST /team/<id>/duplicate. The whole card under a new id,
+ *  born internal + deletable whatever the original was. */
+async function duplicate(
+  client: DaemonClient,
+  id: string,
+): Promise<{ ok: true; member: TeamMember } | { ok: false; status: number; error?: string }> {
+  const res = await client.teamDuplicate(id);
+  if (!res.ok) {
+    log.warn('teamStore.duplicate failed', { id, status: res.status });
+    return { ok: false, status: res.status, error: teamErrorText(res.status, res.body) };
+  }
+  insertOptimistic(res.data);
   return { ok: true, member: res.data };
 }
 
@@ -168,7 +196,10 @@ async function update(
   client: DaemonClient,
   id: string,
   body: TeamPatchBody,
-): Promise<{ ok: true; member: TeamMember } | { ok: false; status: number; error?: string }> {
+): Promise<
+  | { ok: true; member: TeamMember; applied?: TeamApplied }
+  | { ok: false; status: number; error?: string }
+> {
   const prevList = state.list;
   const prevDetail = state.details[id];
   // Optimistic patch on both the list row and the cached detail.
@@ -179,8 +210,9 @@ async function update(
     // Rollback.
     setState('list', prevList);
     if (prevDetail) setState('details', id, prevDetail);
-    return { ok: false, status: res.status, error: res.body };
+    return { ok: false, status: res.status, error: teamErrorText(res.status, res.body) };
   }
+  const applied = res.data.applied;
   setState('list', (m) => m.id === id, () => res.data);
   if (prevDetail) setState('details', id, (d) => ({ ...d, ...res.data }));
   // TEG-3 — revoke hygiene: flipping to internal destroys the token
@@ -189,7 +221,7 @@ async function update(
   if (body.exposure === 'internal' && state.details[id]) {
     setState('details', id, 'token', undefined);
   }
-  return { ok: true, member: res.data };
+  return { ok: true, member: res.data, applied };
 }
 
 /** TEG-3 — POST /team/<id>/token/rotate. On success, patches the cached
@@ -211,14 +243,17 @@ async function rotateToken(
 async function remove(
   client: DaemonClient,
   id: string,
-): Promise<{ ok: true } | { ok: false; status: number; error?: string }> {
+): Promise<
+  | { ok: true; result: TeamDeleteResult }
+  | { ok: false; status: number; error?: string }
+> {
   const res = await client.teamDelete(id);
   if (!res.ok) {
-    return { ok: false, status: res.status, error: res.body };
+    return { ok: false, status: res.status, error: teamErrorText(res.status, res.body) };
   }
   setState('list', (prev) => prev.filter((m) => m.id !== id));
   setState('details', id, undefined as unknown as TeamMemberDetail);
-  return { ok: true };
+  return { ok: true, result: res.data };
 }
 
 // ── WS ──────────────────────────────────────────────────────────────
@@ -273,6 +308,7 @@ export const teamStore = {
   developer,
   pickable,
   create,
+  duplicate,
   update,
   remove,
   rotateToken,

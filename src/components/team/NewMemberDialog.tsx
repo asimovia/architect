@@ -48,6 +48,15 @@ export default function NewMemberDialog(props: { onClose: () => void; onCreated?
   const [error, setError] = createSignal<string | null>(null);
   const [saving, setSaving] = createSignal(false);
   const [drafting, setDrafting] = createSignal(false);
+  // TMR4 — the form is taller than the modal, so the operator presses
+  // Create at the BOTTOM while the error renders at the top: a refused
+  // create looked exactly like a dead button ("le doy a crear y no hace
+  // nada"). Scroll the reason into view instead of hoping they find it.
+  let bodyEl: HTMLDivElement | undefined;
+  const fail = (msg: string): void => {
+    setError(msg);
+    bodyEl?.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const canCreate = createMemo(
     () => name().trim().length > 0 && (prompt().trim().length > 0 || mission().trim().length > 0) && !saving(),
@@ -104,10 +113,10 @@ export default function NewMemberDialog(props: { onClose: () => void; onCreated?
     }
     if (res.status === 409) {
       setName((n) => (/-\d+$/.test(n) ? n.replace(/-(\d+)$/, (_, d) => `-${Number(d) + 1}`) : `${n}-2`));
-      setError('A member with that name already exists — a suffix was suggested. Adjust and Create again.');
+      fail('A member with that name already exists — a suffix was suggested. Adjust and Create again.');
       return;
     }
-    setError(`Create failed (HTTP ${res.status}). Adjust and try again.`);
+    fail(res.error ?? `Create failed (HTTP ${res.status}). Adjust and try again.`);
   };
 
   const onModalClose = (id: string | null) => {
@@ -127,6 +136,7 @@ export default function NewMemberDialog(props: { onClose: () => void; onCreated?
       subtitle="Everything on one screen — describe, optionally draft with AI, Create."
       zIndex={60}
       persistent
+      bodyRef={(el) => { bodyEl = el; }}
       buttons={[
         { id: 'cancel', label: 'Cancel' },
         { id: 'create', label: saving() ? 'Creating…' : 'Create', primary: true },

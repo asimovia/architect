@@ -19,13 +19,19 @@ import { clientsStore } from '~/state/clients';
 import { DEFAULT_PROVIDER } from '~/lib/models';
 import type { EngineChoice } from '~/components/team/ClientModelEffortPicker';
 import { engineFromSaved, isEngineDirty } from '~/lib/team-engine-draft';
+import { appliedText, deletedText } from '~/lib/team-errors';
 import { ModelSection } from '~/components/team/detail/ModelSection';
 import { PromptSection } from '~/components/team/detail/PromptSection';
 import { RefsSection } from '~/components/team/detail/RefsSection';
 import { ExternalAccessSection } from '~/components/team/detail/ExternalAccessSection';
 import { ConfirmButtons } from '~/components/ui/ConfirmButtons';
 
-export default function MemberDetailPanel(props: { memberId: string; onClose: () => void; onDeleted?: () => void }) {
+export default function MemberDetailPanel(props: {
+  memberId: string;
+  onClose: () => void;
+  onDeleted?: (info: string | null) => void;
+  onDuplicated?: (id: string) => void;
+}) {
   const client = () => daemonStore.state.client;
   const member = () => teamStore.get(props.memberId);
 
@@ -52,6 +58,10 @@ export default function MemberDetailPanel(props: { memberId: string; onClose: ()
 
   const [savingSection, setSavingSection] = createSignal<string | null>(null);
   const [error, setError] = createSignal<string | null>(null);
+  // TMR3 — one line saying where the last save actually landed (which
+  // open instances took it, which are mid-turn). Cleared on the next edit.
+  const [applied, setApplied] = createSignal<string | null>(null);
+  const [duplicating, setDuplicating] = createSignal(false);
   // ATM16 — which member the engine draft was seeded from. A background
   // roster refresh must not silently discard an unsaved draft.
   const [engineSeededFor, setEngineSeededFor] = createSignal<string | null>(null);
@@ -110,12 +120,17 @@ export default function MemberDetailPanel(props: { memberId: string; onClose: ()
     }
     setSavingSection(section);
     setError(null);
+    setApplied(null);
     const res = await teamStore.update(c, props.memberId, body);
     setSavingSection(null);
     if (!res.ok) {
-      setError(`Save failed (HTTP ${res.status}) — reverted.`);
+      // TMR4 — the daemon's own reason, not just the number: "model is
+      // mandatory", "effort must be one of …". Without it a refused save
+      // reads as "the panel won't let me change it".
+      setError(res.error ?? `Save failed (HTTP ${res.status}) — reverted.`);
       return;
     }
+    setApplied(appliedText(res.applied));
     // ATM14g — nothing else to do here. The daemon applies an engine change
     // to every conv bound to this member as part of the save (permanently, on
     // disk) and broadcasts it, so open headers follow within ~1s and the next
@@ -130,13 +145,31 @@ export default function MemberDetailPanel(props: { memberId: string; onClose: ()
     }
     const res = await teamStore.remove(c, props.memberId);
     if (res.ok) {
-      props.onDeleted?.();
+      // TMR2 — the delete closed a circle: say what else moved (who
+      // stopped delegating to it, which open agents kept running).
+      props.onDeleted?.(deletedText(res.result));
       props.onClose();
     } else if (res.status === 409) {
-      setError('This member is required and cannot be deleted.');
+      setError(res.error ?? 'This member is required and cannot be deleted.');
     } else {
-      setError(`Delete failed (HTTP ${res.status}).`);
+      setError(res.error ?? `Delete failed (HTTP ${res.status}).`);
     }
+  };
+
+  /** TMR3 — the whole card under a new id, for the operator who wants a
+   *  variant of a member instead of writing one from scratch. */
+  const duplicate = async (): Promise<void> => {
+    const c = client();
+    if (!c || duplicating()) return;
+    setDuplicating(true);
+    setError(null);
+    const res = await teamStore.duplicate(c, props.memberId);
+    setDuplicating(false);
+    if (!res.ok) {
+      setError(res.error ?? `Duplicate failed (HTTP ${res.status}).`);
+      return;
+    }
+    props.onDuplicated?.(res.member.id);
   };
 
   return (
@@ -158,6 +191,13 @@ export default function MemberDetailPanel(props: { memberId: string; onClose: ()
               </Show>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={() => { void duplicate(); }}
+            disabled={duplicating()}
+            class="text-[11px] font-mono uppercase tracking-wider text-gray-300 hover:text-emerald-200 border border-gray-700/60 hover:border-emerald-500/50 rounded px-2 py-1 disabled:opacity-50"
+            title="Create a copy of this member — engine, references and init prompt included"
+          >{duplicating() ? '…' : 'Duplicate'}</button>
           <button type="button" onClick={props.onClose} class="text-gray-400 hover:text-gray-100 px-2 py-1" aria-label="Close">✕</button>
         </header>
 
@@ -169,6 +209,11 @@ export default function MemberDetailPanel(props: { memberId: string; onClose: ()
           </Show>
           <Show when={error()}>
             <div class="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-[12px] text-red-200">{error()}</div>
+          </Show>
+          <Show when={applied()}>
+            <div class="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[12px] text-emerald-200">
+              {applied()}
+            </div>
           </Show>
           <ModelSection
             value={engine()}

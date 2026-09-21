@@ -15,6 +15,7 @@ import { ChatMethods } from './chat';
 import type { Result } from '../result';
 import type {
   TeamCreateBody,
+  TeamDeleteResult,
   TeamDraftBody,
   TeamDraftResponse,
   TeamMember,
@@ -42,6 +43,11 @@ function flattenTeamMember(data: unknown): TeamMemberDetail {
   // TEG-3 — the bearer token may arrive top-level or (defensively) in
   // the frontmatter block; surface it flat either way.
   if (typeof obj.token === 'string') out.token = obj.token;
+  // TMR3 — a PATCH answers with where the change landed (which live
+  // instances took it, which are mid-turn). Never present on a GET.
+  if (obj.applied && typeof obj.applied === 'object') {
+    out.applied = obj.applied as TeamMemberDetail['applied'];
+  }
   return out;
 }
 
@@ -74,17 +80,35 @@ export class TeamMethods extends ChatMethods {
 
   /** PATCH /team/<id> — partial update. `kind`/`required` are immutable
    *  (the daemon rejects them); send only the edited section's fields. */
-  async teamUpdate(id: string, body: TeamPatchBody, signal?: AbortSignal): Promise<Result<TeamMember>> {
+  async teamUpdate(
+    id: string,
+    body: TeamPatchBody,
+    signal?: AbortSignal,
+  ): Promise<Result<TeamMemberDetail>> {
     const res = await this.request<unknown>('PATCH', `/team/${encodeURIComponent(id)}`, body, signal);
     if (!res.ok) return res;
     return { ...res, data: flattenTeamMember(res.data) };
   }
 
-  /** DELETE /team/<id> — 409 when the member is required. */
-  async teamDelete(id: string, signal?: AbortSignal): Promise<Result<{ deleted: boolean; id: string }>> {
-    return this.request<{ deleted: boolean; id: string }>(
+  /** DELETE /team/<id> — 409 when the member is required. The daemon
+   *  also closes the circle (TMR2): it strips the id from every other
+   *  member's `delegates_to` and unbinds the convs that were instances
+   *  of it, and reports both back here. */
+  async teamDelete(id: string, signal?: AbortSignal): Promise<Result<TeamDeleteResult>> {
+    return this.request<TeamDeleteResult>(
       'DELETE', `/team/${encodeURIComponent(id)}`, undefined, signal,
     );
+  }
+
+  /** TMR3 — POST /team/<id>/duplicate. Copies the whole card (engine,
+   *  refs, delegation contract, init prompt) under a new id; the copy is
+   *  always a deletable, internal `profile`. */
+  async teamDuplicate(id: string, signal?: AbortSignal): Promise<Result<TeamMember>> {
+    const res = await this.request<unknown>(
+      'POST', `/team/${encodeURIComponent(id)}/duplicate`, {}, signal,
+    );
+    if (!res.ok) return res;
+    return { ...res, data: flattenTeamMember(res.data) };
   }
 
   /** POST /team/draft — LLM normaliser: free-text mission → structured
