@@ -83,7 +83,10 @@ export function ingestEvent(ev: DaemonEvent): void {
     if (!isHydrating()) capConvWindow(conv);
     return;
   }
-  if (ev.type === 'chat.cancelled') {
+  if (ev.type === 'chat.cancelled' || ev.type === 'chat.error') {
+    // REL1 — a dead turn must also stop the "preparing…" spinner, or the
+    // thread carries the explanation AND a bubble still claiming to be
+    // working on it.
     clearPendingReply(conv);
     clearLastDelta(conv);
   }

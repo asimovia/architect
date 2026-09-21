@@ -37,3 +37,18 @@ describe('historyMsg (AX22)', () => {
     assert.equal(m.attachments, undefined);
   });
 });
+
+describe('historyMsg (REL1)', () => {
+  it('brings a persisted chat.error back as a system error bubble', () => {
+    const m = historyMsg({
+      type: 'chat.error',
+      conv: 'c1',
+      reason: 'subprocess-exited',
+      text: 'The turn ended without a reply — the CLI process exited before answering.',
+      ts: '2026-09-21T08:00:00.000Z',
+    } as unknown as Parameters<typeof historyMsg>[0]);
+    assert.equal(m?.kind, 'system');
+    assert.equal(m?.system_kind, 'error');
+    assert.match(String(m?.text), /ended without a reply/);
+  });
+});

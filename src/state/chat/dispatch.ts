@@ -4,9 +4,17 @@
  * Optimistically pushes a user bubble, POSTs `/chat/dispatch`, and
  * reconciles: the WS echo replaces the placeholder in the ingest
  * reducer, a failure removes it so the operator can edit and resend,
- * and every non-transport failure also lands as a `system` bubble IN
- * THE THREAD (2026-06-10 operator request — errors belong where the
- * operator is looking, not in the console).
+ * and every failure also lands as a `system` bubble IN THE THREAD
+ * (2026-06-10 operator request — errors belong where the operator is
+ * looking, not in the console).
+ *
+ * REL1 (2026-09-21) — that used to exclude `status === 0`, the TRANSPORT
+ * failure: the message never reached the daemon, the optimistic bubble
+ * was rolled back, and the thread showed nothing at all. The operator's
+ * words: "cuando yo lanzo un prompt… si hay un problema de comunicación
+ * con el daemon tiene que salir ahí". The offline strip is a global
+ * status light; it does not tell you THIS message was not delivered, and
+ * it does not give you the text back. Now it does both.
  */
 
 import type { DaemonClient, DispatchBody } from '~/lib/daemon-client';
@@ -96,9 +104,14 @@ function humanizeError(status: number, rawBody: string, shape: DispatchShape): s
   return `${verb}${detail}${shapeDetail}`;
 }
 
+/** The wire shape, for error copy. */
+function shapeOf(shape: DispatchShape): string {
+  return ` · text:${shape.text_len}ch images:${shape.images} docs:${shape.context_docs}`;
+}
+
 /** Push a system bubble unless the identical one landed <2 s ago — the
  *  cockpit's retry/route-on-401 logic can fire the same 400 twice. */
-function pushSystemError(conv: string, text: string): void {
+function pushSystemError(conv: string, text: string, opts?: { retryText?: string }): void {
   const list = state.convMap[conv] ?? [];
   const last = list[list.length - 1];
   const lastTs = last?.ts ? Date.parse(last.ts) : 0;
@@ -112,6 +125,7 @@ function pushSystemError(conv: string, text: string): void {
     kind: 'system',
     system_kind: 'error',
     text,
+    retry_text: opts?.retryText,
     ts: new Date().toISOString(),
   };
   setState('convMap', conv, [...list, bubble]);
@@ -166,9 +180,15 @@ export async function dispatchMessage(
     if (idx >= 0) setState('convMap', conv, list.filter((_, i) => i !== idx));
     clearPendingReply(conv);
     log.warn('chat dispatch failed', res.status, res.body, 'sent:', shape);
-    if (res.status !== 0) {
-      pushSystemError(conv, humanizeError(res.status, (res.body || '').toString(), shape));
-    }
+    pushSystemError(
+      conv,
+      res.status === 0
+        ? `Not delivered — the daemon did not answer (no connection). Your message was NOT sent${shapeOf(shape)}.`
+        : humanizeError(res.status, (res.body || '').toString(), shape),
+      // The text goes with the bubble so a dropped message can be resent
+      // in one click instead of being retyped from memory.
+      { retryText: text },
+    );
     return { ok: false, status: res.status, error: res.body };
   }
 

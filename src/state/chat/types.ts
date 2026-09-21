@@ -68,6 +68,10 @@ export interface ChatMsg {
   cancelled?: boolean;
   /** Severity styling for client-side 'system' messages. */
   system_kind?: 'error' | 'warning' | 'info';
+  /** REL1 — for a `system`/error bubble born from a failed dispatch: the
+   *  text that never made it, so the thread can offer "resend" instead of
+   *  making the operator retype it. */
+  retry_text?: string;
   /** py-1.12.21 — attachments persisted by the daemon. Each entry's
    *  `url` resolves to `GET /chat/uploads/<bucket>/<file>`. Emitted
    *  only for `kind: 'user'` events whose dispatch carried images/docs. */

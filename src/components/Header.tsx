@@ -2,6 +2,7 @@
 
 import { Show, createSignal } from 'solid-js';
 import { jobsStore, mountJobsFeed } from '~/state/jobs';
+import { chatStore } from '~/state/chat';
 import { daemonStore } from '~/state/daemon';
 import { activeLinkStatus, type LinkStatus } from '~/lib/connection-status';
 import { activeProject } from '~/state/projects';
@@ -128,6 +129,11 @@ export default function Header() {
   // component that is mounted in every zone. The Jobs badge below and
   // the Jobs panel both read `jobsStore`, so they cannot disagree.
   mountJobsFeed();
+  // REL1 — one sweep loop for the whole cockpit: a dispatched turn that
+  // never answers and that the daemon does not report as running gets
+  // said out loud, in the thread. Mounted here for the same reason the
+  // jobs feed is: Header is the only always-mounted component.
+  chatStore.mountTurnWatchdog();
   return (
     <header class="sticky top-0 z-40 bg-gray-950/95 backdrop-blur-xl border-b border-gray-800/60 shadow-sm">
       <div class="h-12 flex items-center gap-2 px-3">
@@ -236,8 +242,17 @@ function ZoneButton(props: { zone: typeof ZONES[number] }) {
   // JL-2 — "Jobs (N)": N is the number of processes the daemon has
   // running right now, live over the `jobs.updated` socket event. Hidden
   // at zero so the header stays quiet when nothing is running.
-  const badge = () =>
-    props.zone.id === 'jobs' && jobsStore.runningCount() > 0 ? jobsStore.runningCount() : null;
+  // REL1 — the Jobs badge reads `running/defined` whenever this project
+  // defines any job, and goes amber when at least one of them is down.
+  // Hiding at "0 running" is what let a generator that should have been
+  // up look identical to a project with nothing to run.
+  const badge = (): string | null => {
+    if (props.zone.id !== 'jobs') return null;
+    const defined = jobsStore.definedCount();
+    if (defined === 0) return null;
+    return `${jobsStore.runningCount()}/${defined}`;
+  };
+  const badgeDown = (): boolean => props.zone.id === 'jobs' && jobsStore.downCount() > 0;
   return (
     <button
       type="button"
@@ -253,12 +268,17 @@ function ZoneButton(props: { zone: typeof ZONES[number] }) {
       <span class="hidden lg:inline">{props.zone.label}</span>
       <Show when={badge() !== null}>
         <span
-          class={`font-mono text-[10px] leading-none px-1.5 py-0.5 rounded-full border ${
-            active()
-              ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-200'
-              : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
-          }`}
-          title={`${badge()} job(s) running`}
+          class="font-mono text-[10px] leading-none px-1.5 py-0.5 rounded-full border"
+          classList={{
+            'bg-amber-500/15 border-amber-500/50 text-amber-200': badgeDown(),
+            'bg-emerald-500/20 border-emerald-500/40 text-emerald-200': !badgeDown() && active(),
+            'bg-emerald-500/10 border-emerald-500/30 text-emerald-300': !badgeDown() && !active(),
+          }}
+          title={
+            badgeDown()
+              ? `${jobsStore.downCount()} job(s) defined for this project are NOT running`
+              : `${jobsStore.runningCount()} job(s) running`
+          }
         >
           {badge()}
         </span>

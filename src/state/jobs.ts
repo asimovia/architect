@@ -131,6 +131,20 @@ function runningCount(): number {
   return state.list.filter(isJobLive).length;
 }
 
+/** How many jobs this project DEFINES, running or not. REL1: the badge
+ *  used to hide at zero running, so "the job that should be up is down"
+ *  looked exactly like "this project has no jobs" — the operator's
+ *  incident (a generator that was never started, invisible). A defined
+ *  job that is not running is now the loudest thing in the header. */
+function definedCount(): number {
+  return state.list.length;
+}
+
+/** Jobs that exist but are not running. */
+function downCount(): number {
+  return state.list.filter((j) => !isJobLive(j)).length;
+}
+
 type Mutation = { ok: true } | { ok: false; message: string };
 
 async function mutate(
@@ -165,6 +179,8 @@ const remove = (id: string) => mutate('delete', (c) => c.jobDelete(id));
 export const jobsStore = {
   state,
   runningCount,
+  definedCount,
+  downCount,
   reload,
   create,
   start,

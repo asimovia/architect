@@ -22,7 +22,7 @@ import AssistantBubble from './AssistantBubble';
 
 export function MessageBubble(props: { conv: string; msg: ChatMsg; prepend?: boolean }) {
   if (props.msg.kind === 'user') return <UserBubble msg={props.msg} prepend={props.prepend} />;
-  if (props.msg.kind === 'system') return <SystemBubble msg={props.msg} />;
+  if (props.msg.kind === 'system') return <SystemBubble conv={props.conv} msg={props.msg} />;
   return <AssistantBubble conv={props.conv} msg={props.msg} />;
 }
 

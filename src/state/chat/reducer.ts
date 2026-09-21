@@ -104,6 +104,25 @@ export function applyChatEvent(list: readonly ChatMsg[], ev: DaemonEvent): ChatE
       };
     }
 
+    // REL1 — the daemon telling us a turn died (subprocess exited without
+    // a final, hard timeout). It is a real, persisted chat event, so it
+    // renders in the thread and comes back with the history; the streaming
+    // bubble it interrupts stops pretending to be alive.
+    case 'chat.error': {
+      const lastIdx = list.length - 1;
+      const last = list[lastIdx];
+      const next: ChatMsg = {
+        kind: 'system',
+        system_kind: 'error',
+        text: str(ev.text) || 'The turn ended without a reply.',
+        ts: strOrUndef(ev.ts),
+      };
+      if (last && last.kind === 'assistant' && last.streaming) {
+        return { op: 'append', msg: next };
+      }
+      return { op: 'append', msg: next };
+    }
+
     case 'chat.cancelled': {
       const lastIdx = list.length - 1;
       const last = list[lastIdx];

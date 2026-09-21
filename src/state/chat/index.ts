@@ -36,6 +36,7 @@ import { bindCluster, clearClusterChat, hasCachedChat } from './cluster-slices';
 import { ingestEvent, ingestEventForCluster, loadConvMessagesPage } from './ingest';
 import { loadEarlierMessages } from './paging';
 import { dispatchMessage } from './dispatch';
+import { mountTurnWatchdog } from './turn-watchdog';
 import { hydrateFromSnapshot } from './snapshot';
 import { ingestConvEvent } from './conv-events';
 import { ingestQueueEvent, hydrateQueue } from './queue';
@@ -102,6 +103,7 @@ export const chatStore = {
   ingestEvent,
   ingestEventForCluster,
   dispatchMessage,
+  mountTurnWatchdog,
   // py-1.11.0 — chat-state-rearchitecture (daemon-authoritative path).
   hydrateFromSnapshot,
   ingestConvEvent,

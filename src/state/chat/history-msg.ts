@@ -38,6 +38,17 @@ export function historyMsg(ev: DaemonEvent): ChatMsg | null {
       stream_id: typeof ev.stream_id === 'string' ? ev.stream_id : undefined,
     };
   }
+  // REL1 — a turn that died is part of the conversation: the daemon
+  // persists `chat.error`, so re-opening the thread must still show why
+  // nothing came back instead of an unanswered message.
+  if (t === 'chat.error') {
+    return {
+      kind: 'system',
+      system_kind: 'error',
+      text: String(ev.text ?? 'The turn ended without a reply.'),
+      ts: String(ev.ts ?? ''),
+    };
+  }
   if (t === 'chat.cancelled') {
     return {
       kind: 'assistant',
