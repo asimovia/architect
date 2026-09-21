@@ -23,3 +23,13 @@
 # `?t=`, this closes the plain-URL path too.
 /health.json
   Cache-Control: no-store
+
+# REL2 — the daemon auto-update surface. Every cluster fetches these two
+# files by their plain URL and verifies one against the other; an edge
+# copy of either, a deploy out of step, is a release that silently does
+# not arrive (observed 2026-09-21: the plain URL served the previous
+# bundle while `?t=` served the new one).
+/reference/cluster/scripts/daemon.py
+  Cache-Control: no-store
+/reference/cluster/scripts/daemon.py.sig
+  Cache-Control: no-store
