@@ -65,6 +65,24 @@ export function cleanChatText(text: string): string {
  * (optimistic bubble) may be rendered. A conv slug once leaked into
  * `url` and painted a broken `<img>`; anything else is malformed.
  */
+/**
+ * Merge incoming attachments over the ones already on the bubble.
+ *
+ * The daemon absorbs upload failures silently and still emits the
+ * `chat.user` echo text-only (daemon/chatsvc.py: "the dispatch still
+ * proceeds with text-only"). Letting that echo land verbatim would wipe
+ * the optimistic `data:` URLs that are already painting — the images
+ * vanish exactly when the turn starts. So: an echo that carries NO
+ * attachments keeps what the bubble already shows; an echo that carries
+ * some replaces them (data: URLs → canonical /chat/uploads/ URLs).
+ */
+export function keepAttachments(
+  prev: ChatAttachment[] | undefined,
+  incoming: ChatAttachment[] | undefined,
+): ChatAttachment[] | undefined {
+  return incoming ?? prev;
+}
+
 export function parseAttachments(raw: unknown): ChatAttachment[] | undefined {
   if (!Array.isArray(raw) || raw.length === 0) return undefined;
   const out: ChatAttachment[] = [];

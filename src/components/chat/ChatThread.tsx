@@ -171,10 +171,18 @@ export default function ChatThread(props: {
     });
   };
 
+  // T-chat-images-robust — dropping a dragged file onto the WALL (not the
+  // composer) must never navigate the browser away to a raw file URL: the
+  // composer owns file intake, the thread just refuses the navigation.
+  const guardDrop = (e: DragEvent): void => {
+    if (e.dataTransfer?.types.includes('Files')) e.preventDefault();
+  };
   return (
     <div
       ref={(el) => { scrollEl = el; props.ref(el); }}
       onScroll={onScroll}
+      onDragOver={guardDrop}
+      onDrop={guardDrop}
       class="flex-1 min-h-0 overflow-y-auto p-3 space-y-6"
     >
       <Show when={showLoader()}>

@@ -19,7 +19,7 @@
  */
 
 import type { DaemonEvent } from '~/lib/daemon-client';
-import { cleanChatText, parseAttachments } from '~/lib/chat-sanitize';
+import { cleanChatText, keepAttachments, parseAttachments } from '~/lib/chat-sanitize';
 import type { ChatMsg } from './types';
 
 export type ChatEventPatch =
@@ -43,19 +43,24 @@ export function applyChatEvent(list: readonly ChatMsg[], ev: DaemonEvent): ChatE
     case 'chat.user': {
       const text = str(ev.text);
       const author = strOrUndef(ev.author);
-      const attachments = parseAttachments(ev.attachments);
+      const incoming = parseAttachments(ev.attachments);
       // Replace the optimistic placeholder with the canonical echo so
       // the bubble isn't duplicated (client and daemon timestamps differ).
       const phIdx = list.findIndex(
         (m) => m.kind === 'user' && m._placeholder_user && m.text === text && (!author || m.author === author),
       );
       if (phIdx >= 0) {
+        // Never wipe: a text-only echo (upload absorbed daemon-side)
+        // must keep the optimistic data: URLs until canonical ones arrive.
+        const prev = list[phIdx];
+        const attachments = keepAttachments(prev?.attachments, incoming);
         return {
           op: 'patch',
           index: phIdx,
           fields: { author, ts: strOrUndef(ev.ts), attachments, _placeholder_user: undefined },
         };
       }
+      const attachments = incoming;
       return {
         op: 'append',
         msg: { kind: 'user', text, author, ts: strOrUndef(ev.ts), attachments },
