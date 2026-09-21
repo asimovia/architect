@@ -118,8 +118,8 @@ export default function ChatPanel() {
       log.warn('[archive] no active conv — ignored');
       return;
     }
-    // V107.12 (extended) — neither fixed system agent (Architect Agent /
-    // onboarding conv, or the live Roadmap Architect conv) is ever
+    // V107.12 (extended) — neither fixed system agent (Architect /
+    // onboarding conv, or the live Orchestrator conv) is ever
     // archivable. The button is hidden in ChatScopeStrip but this guards
     // against any future call path (keyboard shortcut, programmatic
     // invoke, misconfiguration). Daemon-side guard in

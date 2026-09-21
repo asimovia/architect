@@ -13,7 +13,7 @@ export type { ChatAttachment };
 export const ONBOARDING_CONV_ID = '_onboarding_v1';
 
 /** The two fixed/system agents present in every project: the Architect
- *  Agent (`_onboarding_v1`, the planner) and the live Roadmap Architect
+ *  (`_onboarding_v1`, the planner) and the live Orchestrator
  *  conv (`roadmap-architect-*`, the queue executor). Neither can be
  *  archived, reordered, or removed from the rail's pinned head — see
  *  ChatRail's head/body split and AgentCard's draggable guard. */

@@ -37,8 +37,8 @@ export default function ChatThread(props: {
   // Re-fetches only when activeConv changes AND convMap is empty (the
   // WS keeps it fresh after that).
   //
-  // V107.24 — `_onboarding_v1` (the Master / Architect Agent since
-  // V107.12) is NO LONGER excluded. Pre-V107.12 it was a synthetic
+  // V107.24 — `_onboarding_v1` (Architect since ATM20, Master /
+  // Architect Agent before) is NO LONGER excluded. Pre-V107.12 it was a synthetic
   // local-only conv (the old Coordinator welcome bubble), so fetching
   // its history was wasted work. Now it's the always-on master that
   // persists 48+ real messages on the daemon — skipping it left

@@ -189,7 +189,7 @@ body.col-reordering .projects-rail-resize {
   50%      { top: calc(100% - 5px); }
 }
 
-/* V107.4 — "Roadmap Architect active on this cluster" indicator.
+/* V107.4 — "Orchestrator active on this cluster" indicator.
    Different from is-working (which fires on every assistant delta).
    is-architect-active stays on for as long as a non-archived
    roadmap-architect conv exists, even between turns, so the operator

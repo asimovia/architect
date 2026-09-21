@@ -244,7 +244,7 @@ export default function App() {
 // THIS cluster (persisted to localStorage by chatStore.setActiveConv).
 // If absent / stale (conv no longer exists or is archived), fall back
 // to the most recently active non-archived conv; else seed and return
-// the Architect Agent (the always-on fallback).
+// the Architect (the always-on fallback).
 function pickDefaultConv(): string {
   const meta = chatStore.state.convMeta;
   const convs = chatStore.state.convs;

@@ -41,8 +41,8 @@ export interface AgentTypeInfo {
 }
 
 /** ATM12 follow-up (2026-07-07, 2nd correction) — the ONE shared colour
- *  for both fixed system agents (Master/Architect Agent + Roadmap
- *  Architect). First pass introduced a dedicated hue (`--theme-byline-
+ *  for both fixed system agents (Architect + Orchestrator).
+ *  First pass introduced a dedicated hue (`--theme-byline-
  *  fixed`, dark orange/red) — operator rejected it as clashing with the
  *  rest of the palette. Reusing the theme's OWN accent
  *  (`--theme-accent-bright`, already themed per preset) instead
@@ -138,11 +138,11 @@ export const AGENT_TYPES: Record<AgentType, AgentTypeInfo> = {
   },
   'roadmap-architect': {
     id: 'roadmap-architect',
-    label: 'Roadmap Architect',
-    shortLabel: 'Architect',
+    label: 'Orchestrator',
+    shortLabel: 'Orchestrator',
     emoji: '🗺️',
     // ATM12 follow-up (2026-07-07 operator correction) — shares the
-    // Master Architect's FIXED_AGENT_COLOR: both are protected system
+    // Architect's FIXED_AGENT_COLOR: both are protected system
     // agents and should read as one visual "family", not two.
     color: FIXED_AGENT_COLOR,
     role:
@@ -194,8 +194,8 @@ export function isServiceType(t: AgentType | string | undefined | null): boolean
 // harmless since `custom` never colours its OWN name text.
 const MASTER_ARCHITECT_INFO: AgentTypeInfo = {
   id: 'custom' as AgentType, // back-fill — daemon-side type is still 'custom'
-  label: 'Master Architect',
-  shortLabel: 'Master',
+  label: 'Architect',
+  shortLabel: 'Architect',
   emoji: '👑',
   color: FIXED_AGENT_COLOR,
   role:
@@ -208,8 +208,8 @@ const MASTER_ARCHITECT_INFO: AgentTypeInfo = {
 /** py-1.10.24 — Visual-only resolution: look at the conv id first,
  *  then the meta.type, then fall back to custom. The conv id is the
  *  most authoritative signal because:
- *    • `_onboarding_v1` ↔ Master Architect (A001) — unforgeable
- *    • `roadmap-architect-<slug>` ↔ Roadmap Architect — unforgeable
+ *    • `_onboarding_v1` ↔ Architect (A001) — unforgeable
+ *    • `roadmap-architect-<slug>` ↔ Orchestrator — unforgeable
  *    • everything else falls through to `meta.type`
  *
  *  Callers that don't have the conv id can pass `null` and the

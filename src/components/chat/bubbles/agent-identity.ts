@@ -27,7 +27,7 @@ export function convAgentId(conv: string | null | undefined): string | null {
 export function convAgentName(conv: string | null | undefined, msg?: ChatMsg): string {
   const title = convMetaOf(conv)?.title?.trim();
   if (title) return title;
-  if (conv === ONBOARDING_CONV_ID) return 'Architect Agent';
+  if (conv === ONBOARDING_CONV_ID) return 'Architect';
   const aid = convAgentId(conv);
   if (aid) return aid;
   const author = msg?.author?.trim();

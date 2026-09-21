@@ -47,7 +47,7 @@ export default function ChatScopeStrip(props: Props) {
   // the primary name — otherwise rail and header show two names for one conv.
   const title = () => props.meta?.title?.trim() || props.conv;
   // py-1.10.24 — conv-aware lookup, so the onboarding conv shows as
-  // Master Architect and roadmap-architect slugs keep the cyan cap even
+  // Architect and roadmap-architect slugs keep the cyan cap even
   // when conv_meta has drifted.
   const typeInfo = () => agentVisualInfo(props.conv, props.meta);
   // The pill shows the type initial: 1-2 chars verbatim, otherwise the

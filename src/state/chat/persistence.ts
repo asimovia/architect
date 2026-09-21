@@ -89,7 +89,7 @@ export function loadConvMeta(): void {
       // 'Coordinator' label. Only flips the default; a title the
       // operator typed themselves is preserved.
       if (k === ONBOARDING_CONV_ID && healed.title === 'Coordinator') {
-        healed = { ...healed, title: 'Architect Agent' };
+        healed = { ...healed, title: 'Architect' };
         touched = true;
       }
       if (touched) migrated += 1;

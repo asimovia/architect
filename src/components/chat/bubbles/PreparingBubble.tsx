@@ -15,13 +15,13 @@ import { ThinkingPlaceholder } from './streaming';
 
 export function PreparingBubble(props: { conv: string; dispatchedAt: number }) {
   const meta = () => chatStore.state.convMeta[props.conv];
-  // V89.1 — same fallback rules as AssistantBubble: 'Architect Agent'
+  // V89.1 — same fallback rules as AssistantBubble: 'Architect'
   // ONLY for the onboarding conv. An untitled custom conv falls back to
   // its agentId chip, never to another agent's name.
   const primary = (): string => {
     const title = meta()?.title?.trim();
     if (title) return title;
-    if (props.conv === ONBOARDING_CONV_ID) return 'Architect Agent';
+    if (props.conv === ONBOARDING_CONV_ID) return 'Architect';
     return meta()?.agentId || 'agent';
   };
   return (

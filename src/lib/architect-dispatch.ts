@@ -1,5 +1,5 @@
 /**
- * architect-dispatch.ts — shared entrypoint for the Roadmap Architect.
+ * architect-dispatch.ts — shared entrypoint for the Orchestrator.
  *
  * One function (`runArchitectOnScope`) drives both buttons:
  *   • Run All in the header → mode='all', scope = filtered active initiatives
@@ -118,7 +118,7 @@ export async function runArchitectOnScope(scope: ArchitectScope): Promise<void> 
   const existing = findArchitectConv();
   const conv = existing ?? chatStore.createConv({
     type: 'roadmap-architect',
-    title: 'Roadmap Architect',
+    title: 'Orchestrator',
     model: 'auto',
   });
 

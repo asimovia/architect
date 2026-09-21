@@ -64,10 +64,10 @@ export default function AgentCard(props: AgentCardProps) {
   // ChatScopeStrip. The A00N agentId stays in the tooltip only.
   const title = () => props.meta.title?.trim() || props.conv;
   // Resolve the visual info (emoji + colour + label) from the conv
-  // slug + meta; for `_onboarding_v1` this resolves to Master Architect
+  // slug + meta; for `_onboarding_v1` this resolves to Architect
   // regardless of stored agent_type.
   const typeInfo = () => agentVisualInfo(props.conv, props.meta);
-  // The two fixed system agents (Architect Agent + Roadmap Architect) —
+  // The two fixed system agents (Architect + Orchestrator) —
   // pinned at the rail's head, never draggable, coloured by their type
   // so the operator can tell them apart from the project's own agents
   // at a glance.

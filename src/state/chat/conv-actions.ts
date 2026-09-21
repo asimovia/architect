@@ -47,7 +47,7 @@ export function setActiveConv(conv: string | null): void {
 }
 
 /**
- * Seed the synthetic Architect Agent conversation (V46 / V78b).
+ * Seed the synthetic Architect conversation (V46 / V78b, ATM20).
  * Idempotent. Creates the empty slot only — the rail card needs it to
  * exist (V82) but the agent introduces itself organically on the first
  * dispatch (the bootstrap brief rides along as a context_doc).
@@ -60,14 +60,14 @@ export function seedOnboardingConv(): void {
     // transient roadmap-architect (spawned per Run All pass) and it
     // reinforces that THIS is the always-on master that owns the
     // project. The conv id is unchanged.
-    title: 'Architect Agent',
+    title: 'Architect',
     type: 'custom',
     location: { type: 'local', host: 'this machine' },
   });
   if (!state.activeConv) setState('activeConv', ONBOARDING_CONV_ID);
 }
 
-/** True once the Architect Agent conv received a real user message.
+/** True once the Architect conv received a real user message.
  *  Gates the bootstrap-brief attachment (first dispatch only) and keeps
  *  the rail card visible after initiatives appear. */
 export function onboardingHasUserMessages(): boolean {
@@ -202,7 +202,7 @@ export function unarchiveConv(conv: string): void {
 }
 
 /**
- * V106 — the most-recent non-archived Roadmap Architect conv, or null.
+ * V106 — the most-recent non-archived Orchestrator conv, or null.
  * Consumed by the projects rail's per-row "architect active" dot.
  *
  * The ranking itself lives in `~/lib/conv-state` so this answer, the
