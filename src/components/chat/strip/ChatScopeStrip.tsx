@@ -75,12 +75,24 @@ export default function ChatScopeStrip(props: Props) {
   // ATM12 follow-up (2026-07-07 operator correction) — the fixed-agent
   // explainer sits under THIS agent's own name row, shown only while that
   // agent is selected, instead of one combined note above the rail.
-  const fixedNote = (): string | null => {
+  //
+  // ORC3 (2026-09-22) — it now states the ROLE, not just a warning. The
+  // cluster has exactly two system agents and the split between them is
+  // the product: one owns the plan, the other runs it, and neither writes
+  // code. An operator who cannot see that from the header ends up asking
+  // the wrong one for the wrong thing.
+  const systemRole = (): { name: string; scope: string } | null => {
     if (props.conv === ONBOARDING_CONV_ID) {
-      return 'Fixed system agent — plans only (roadmap, context, links, crons). Never writes code.';
+      return {
+        name: 'Project architect',
+        scope: 'context · roadmap · priorities — plans the work, never writes code',
+      };
     }
     if (isFixedAgentConv(props.conv)) {
-      return 'Fixed system agent — executes the queue and may dispatch agents. Never writes code itself.';
+      return {
+        name: 'Orchestrator',
+        scope: 'runs the queue in order and hands each task to a team member — never writes code',
+      };
     }
     return null;
   };
@@ -215,16 +227,27 @@ export default function ChatScopeStrip(props: Props) {
           />
         </Show>
       </div>
-      <Show when={fixedNote()}>
-        {/* Pushed flush right with a real bottom margin (2026-07-07), and
-            coloured off the theme accent rather than the rejected
-            orange/red — same reasoning as AgentCard's pill. */}
-        <p
-          class="px-2.5 pb-1.5 mb-1.5 text-[10px] leading-snug text-right"
-          style={{ color: 'var(--theme-accent-bright, #34d399)' }}
-        >
-          {fixedNote()}
-        </p>
+      <Show when={systemRole()}>
+        {(role) => (
+          /* One line, under the name row: what this agent is FOR. Coloured
+             off the theme accent (never the rejected orange/red) — same
+             reasoning as AgentCard's pill. */
+          <p class="flex items-center gap-1.5 px-2.5 pb-1.5 mb-1 text-[10px] leading-snug min-w-0">
+            <span
+              class="inline-flex items-center px-1 py-0.5 rounded font-mono text-[9px] uppercase tracking-[0.12em] flex-shrink-0"
+              style={{
+                color: 'var(--theme-accent-bright, #34d399)',
+                border: '1px solid color-mix(in srgb, var(--theme-accent-bright, #34d399) 33%, transparent)',
+              }}
+            >
+              system agent
+            </span>
+            <span class="font-semibold flex-shrink-0" style={{ color: 'var(--theme-accent-bright, #34d399)' }}>
+              {role().name}
+            </span>
+            <span class="text-gray-500 truncate">({role().scope})</span>
+          </p>
+        )}
       </Show>
     </div>
   );

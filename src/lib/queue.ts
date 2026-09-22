@@ -8,9 +8,19 @@
  * (only `active` items are queueable). Execute → it completes →
  * auto-archives. Reset just empties the list.
  *
- * Storage is per-project localStorage (the cockpit's own memory), keyed
- * by the project's CLUSTER ID. It is deliberately NOT the shared `next`
- * wall and NOT persisted into the .meshkore roadmap.
+ * ORC2 (2026-09-22) — the queue moved to the DAEMON (`GET/POST
+ * /roadmap/queue`, one file per project). It had to: an agent has no
+ * localStorage, so the Orchestrator could not read the list it was being
+ * asked to run. Pressing "Run queue" pasted the order into its bootstrap
+ * and saying "run the queue" in chat carried nothing at all — two
+ * different requests for the same thing, and the second one made the
+ * agent invent an order (that is how a release got packaged before the
+ * product worked). Now both name the same server list, and so does a
+ * second tab or another device.
+ *
+ * localStorage stays as (a) the instant paint before the fetch lands and
+ * (b) the migration source: a queue staged before this version is pushed
+ * up the first time a project binds and the server has none.
  *
  * Order = insertion order (the execution order). The list is deduped.
  *
@@ -21,10 +31,12 @@
  * dropped) and a refresh read a different key → staged items vanished. Now the
  * App side-effect bus EXPLICITLY binds the active cluster via `bindCluster()`,
  * the SAME proven path viewStore/chatStore use — so the key is always the exact
- * cluster_id the rest of the per-project state uses. No daemonStore reads here.
+ * cluster_id the rest of the per-project state uses. daemonStore is read only
+ * for the CLIENT (never for the key), and only a tick after the bind.
  */
 
 import { createRoot, createSignal } from 'solid-js';
+import { daemonStore } from '~/state/daemon';
 import { log } from '~/lib/log';
 
 const KEY_PREFIX = 'mc-exec-queue::';
@@ -66,12 +78,58 @@ export function bindCluster(clusterId: string | null): void {
   setCluster(clusterId);
   setIds(readRaw(keyFor(clusterId)));
   log.debug('[queue] bound cluster', { cluster: clusterId, count: ids().length });
+  // ORC2 — the server is the source of truth; the local read above is just
+  // the instant paint. Deferred a tick because bind runs inside the
+  // daemon-binding batch, where `daemonStore.state.client` may still be the
+  // previous project's (the same race FC-2 fixed for the storage key).
+  setTimeout(() => { void hydrate(); }, 0);
 }
 
 function write(next: string[]): void {
   setIds(next);
   persist(cluster(), next);
+  void push(next);
   log.debug('[queue] persisted', { cluster: cluster(), count: next.length });
+}
+
+/** Send the list to the daemon. Optimistic: the local signal already
+ *  moved, so a failed POST leaves the UI right and the server behind —
+ *  the next mutation retries the whole list, and a reload re-reads the
+ *  server. Never throws. */
+async function push(next: string[]): Promise<void> {
+  const client = daemonStore.state.client;
+  if (!client) return;
+  const res = await client.roadmapQueueSet(next);
+  if (!res.ok) log.warn('[queue] daemon rejected the queue', { status: res.status });
+}
+
+/** ORC2 — adopt the daemon's list for this project (or seed it from the
+ *  local one). Called on every bind; cheap, one anonymous GET. */
+async function hydrate(): Promise<void> {
+  const bound = cluster();
+  const client = daemonStore.state.client;
+  if (!client) return;
+  const res = await client.roadmapQueueGet();
+  if (!res.ok || cluster() !== bound) return;
+  const remote = Array.isArray(res.data?.initiatives) ? res.data.initiatives : [];
+  const local = ids();
+  if (remote.length === 0 && local.length > 0) {
+    // Migration: this browser had a queue from before the server owned it.
+    log.info('[queue] migrating local queue to the daemon', { count: local.length });
+    void push(local);
+    return;
+  }
+  setIds(remote);
+  persist(bound, remote);
+}
+
+/** WS `roadmap.queue_updated` — another tab (or an agent) changed it. */
+export function applyRemoteQueue(next: string[]): void {
+  const clean = next.filter((x) => typeof x === 'string');
+  if (clean.join('\u0000') === ids().join('\u0000')) return;
+  setIds(clean);
+  persist(cluster(), clean);
+  log.debug('[queue] adopted remote queue', { count: clean.length });
 }
 
 /** The queued initiative ids, in execution (insertion) order. Reactive. */

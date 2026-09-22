@@ -32,6 +32,28 @@ export class RoadmapMethods extends ConfigMethods {
     return this.request<LiveTasksResponse>('GET', '/roadmap/live', undefined, signal);
   }
 
+  /** ORC2 — the execution queue as SERVER state: the ordered initiative
+   *  ids the operator staged. Public read (same class as /state); the
+   *  daemon prunes anything already finished, so what comes back is what
+   *  would actually run. */
+  async roadmapQueueGet(signal?: AbortSignal): Promise<Result<{ initiatives: string[]; count: number }>> {
+    return this.request<{ initiatives: string[]; count: number }>(
+      'GET', '/roadmap/queue', undefined, signal, /*requireAuth*/ false,
+    );
+  }
+
+  /** ORC2 — replace the queue. The daemon broadcasts `roadmap.queue_updated`
+   *  so every other tab (and the Orchestrator's next briefing) sees the same
+   *  list. */
+  async roadmapQueueSet(
+    initiatives: string[],
+    signal?: AbortSignal,
+  ): Promise<Result<{ initiatives: string[]; count: number }>> {
+    return this.request<{ initiatives: string[]; count: number }>(
+      'POST', '/roadmap/queue', { initiatives }, signal,
+    );
+  }
+
   /** V86w — Per-initiative git activity. Returns commits whose
    *  subject/body mentions the initiative id, plus the files each
    *  commit touched. Multi-repo workspaces walk depth-1

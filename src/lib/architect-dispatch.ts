@@ -11,11 +11,16 @@
  * and depend_on serialisation are the same in both modes — only the
  * bootstrap turn differs.
  *
+ * ORC2 (2026-09-22) — the bootstrap no longer PASTES the scope. The
+ * queue is server state (`POST /roadmap/queue`), the Orchestrator reads
+ * it in its own briefing, and this message is just the operator saying
+ * "go" — the same sentence they can type in the chat. Before this the
+ * button carried an order that typing did not, so the two entry points
+ * were different requests and only one of them worked.
+ *
  * The per-initiative variant carries `initiative_id` on the dispatch
  * body so the daemon's linear-init invariant (3) refuses 409 if the
- * architect drifts into other initiatives mid-pass. Belt-and-braces:
- * the bootstrap itself also names the single-initiative constraint in
- * plain text.
+ * architect drifts into other initiatives mid-pass.
  *
  * STOP semantics are uniform: `stopArchitect()` cancels the architect's
  * in-flight turn (chat.cancelled WS event), keeping the conv visible
@@ -64,18 +69,17 @@ export interface ArchitectScope {
  *  the system prompt (`AGENT_PROMPTS["roadmap-architect"]`) and stays
  *  unchanged so we don't drift the load-bearing instructions. */
 function buildBootstrap(scope: ArchitectScope): string {
-  const list = scope.initiatives;
-  const head = list[0]; // caller guarantees ≥1; `head &&` narrows for TS
-  const one = list.length === 1;
+  const n = scope.initiatives.length;
   return [
-    one && head ? `Run initiative \`${head.id}\`.` : `Run all.`,
+    `Run the queue.`,
     ``,
-    `Scope — process these ${list.length} initiative${one ? '' : 's'} IN THIS ORDER. The operator's order is the contract: do NOT reorder by id, and do NOT dispatch into any initiative outside this list.`,
-    ...list.map((it, i) => `${i + 1}. ${it.id} — ${it.title}`),
+    `The ${n} staged initiative${n === 1 ? '' : 's'} and, per task, whether it is READY / WAITING / BLOCKED right now are in your \`## Execution queue\` section — rebuilt from server state for every turn, including this one. That section is the scope; nothing else is.`,
     ``,
-    `For each: run it end-to-end; when every task is \`done\` set the initiative \`status: done\` (the daemon archives it — confirm "closed + archived" in the transition block), then continue to the NEXT in this list. After the LAST, emit the end-of-pass 4-bucket summary and stop. linear-init Invariant 3 refuses 409 on cross-initiative dispatch while one still has live work.`,
+    `Work it top-down: dispatch the first READY task, put the right team member on it (\`## Your team\`), apply each verdict, and RE-READ the queue section on every wake — a task finishing can make an earlier position ready, and going back to it is the point.`,
     ``,
-    `Follow your SOP exactly. The chain on every blocker: DECISION CATALOG → STUB-AND-FLAG → DECISION MATRIX → CONSULT-A001. Never halt mid-pass; the single voluntary halt is the end-of-pass summary.`,
+    `If the order is wrong — shipping something before the thing being shipped works, a gate that says NO-GO — say it in ONE line and name the swap you would make. Don't silently reorder, and don't add or rewrite roadmap items: that is the Architect's job.`,
+    ``,
+    `Follow your SOP. The chain on every blocker: DECISION CATALOG → STUB-AND-FLAG → DECISION MATRIX → CONSULT-A001. Never halt mid-pass; the single voluntary halt is the end-of-pass summary.`,
     ``,
     `Start now. Your very first line MUST be \`═══ VALIDATION GREEN ═══\` or \`═══ VALIDATION RED ═══\`. Be terse.`,
   ].join('\n');
@@ -113,6 +117,15 @@ export async function runArchitectOnScope(scope: ArchitectScope): Promise<void> 
   if (scope.initiatives.length === 0) {
     log.info('[architect-dispatch] empty scope — nothing to do');
     return;
+  }
+
+  // ORC2 — make the server queue say exactly what we are asking it to run.
+  // The local list is already pruned of finished work; pushing it here means
+  // the Orchestrator's `## Execution queue` section and this button can
+  // never describe two different things.
+  const pushed = await client.roadmapQueueSet(scope.initiatives.map((it) => it.id));
+  if (!pushed.ok) {
+    log.warn('[architect-dispatch] could not publish the queue', { status: pushed.status });
   }
 
   const existing = findArchitectConv();

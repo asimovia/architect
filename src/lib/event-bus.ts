@@ -27,6 +27,7 @@ import { chatStore } from '~/state/chat';
 import { serverStore } from '~/state/server';
 import { storyStore } from '~/state/story';
 import { teamStore } from '~/state/team';
+import { applyRemoteQueue } from '~/lib/queue';
 import { daemonStore } from '~/state/daemon';
 import { viewStore } from '~/state/view';
 import { bumpContextRev } from '~/state/context-sync';
@@ -179,6 +180,15 @@ export function attachEventBus(
         return;
       }
       chatStore.ingestQueueEvent(ev);
+      return;
+    }
+    if (t === 'roadmap.queue_updated') {
+      // ORC2 — the execution queue is server state now: another tab (or the
+      // operator on another device) restaged it. Active cluster only; a
+      // switch-back re-hydrates from the daemon anyway.
+      if (!isActiveCluster()) return;
+      const next = (ev as { initiatives?: unknown }).initiatives;
+      if (Array.isArray(next)) applyRemoteQueue(next as string[]);
       return;
     }
     if (t.startsWith(TEAM_TYPE_PREFIX)) {
