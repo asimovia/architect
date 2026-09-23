@@ -6,6 +6,7 @@
  * `chatStore` facade in `index.ts`).
  */
 
+import type { TurnProgress } from '~/lib/turn-progress';
 import { createStore } from 'solid-js/store';
 import { createSignal } from 'solid-js';
 import { initialChatState, type ChatStoreState } from './types';
@@ -43,6 +44,24 @@ export function clearPendingReply(conv: string): void {
 export function clearLastDelta(conv: string): void {
   if (state.lastDeltaTsByConv[conv] === undefined) return;
   setState('lastDeltaTsByConv', (xs) => {
+    const { [conv]: _drop, ...rest } = xs;
+    return rest;
+  });
+}
+
+/** LT-3 — record the daemon's live turn progress for a conv. Dropped
+ *  frames (an older daemon, a malformed event) are ignored rather than
+ *  stored as zeroes: the UI shows nothing sooner than something untrue. */
+export function setTurnProgress(conv: string, p: TurnProgress | null): void {
+  if (!p) return;
+  setState('turnProgress', conv, p);
+}
+
+/** Turn over — stop reporting what it was doing. Paired with
+ *  `clearLastDelta` on every terminal event. */
+export function clearTurnProgress(conv: string): void {
+  if (state.turnProgress[conv] === undefined) return;
+  setState('turnProgress', (xs) => {
     const { [conv]: _drop, ...rest } = xs;
     return rest;
   });

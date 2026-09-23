@@ -107,7 +107,7 @@ export function AssistantBubble(props: { conv: string; msg: ChatMsg; headerless?
             >
               {/* V86s — empty streaming → placeholder; populated →
                   the tail clamp showing the latest lines. */}
-              <Show when={props.msg.text.trim().length > 0} fallback={<ThinkingPlaceholder />}>
+              <Show when={props.msg.text.trim().length > 0} fallback={<ThinkingPlaceholder conv={props.conv} />}>
                 <StreamingTail text={props.msg.text} />
               </Show>
               <Show when={props.msg.streaming && props.msg.text.trim().length > 0}>

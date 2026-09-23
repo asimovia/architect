@@ -5,6 +5,8 @@
  * import this one, and nothing here may import them back.
  */
 
+import type { TurnProgress } from '~/lib/turn-progress';
+
 import type { ChatConvSummary, ChatQueueItem } from '~/lib/daemon-client';
 import type { ChatAttachment } from '~/lib/chat-sanitize';
 
@@ -122,6 +124,12 @@ export interface ChatStoreState {
    *  per conv, so the streaming bubble can tell when the agent has been
    *  quiet "too long" (>~1.5 s). Cleared on final/cancelled. */
   lastDeltaTsByConv: Record<string, number>;
+  /** LT-3 — the daemon's live `conv.progress` per working conv: what the
+   *  turn is doing right now (tool / streaming / waiting), how long it
+   *  has run, how long it has been quiet. Replaces the rotating pool of
+   *  invented verbs that used to stand in for this. Cleared when the
+   *  turn ends. */
+  turnProgress: Record<string, TurnProgress>;
   /** py-1.11.0 — daemon-authoritative conv summaries from
    *  `GET /chat/snapshot` + WS conv.* events. When populated this is the
    *  single source of truth for the rail list AND for "is this conv live
@@ -173,6 +181,7 @@ export const initialChatState: ChatStoreState = {
   clusterActivity: {},
   pendingReplyConvs: {},
   lastDeltaTsByConv: {},
+  turnProgress: {},
   convs: {},
   convsHydratedAt: null,
   convsStale: false,

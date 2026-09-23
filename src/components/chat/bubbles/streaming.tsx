@@ -8,10 +8,22 @@
  * The verbs rotate every 1.8 s. V105 widened the pool from 6 to 36 so a
  * long pause looks like progress instead of a 3-state loader: a full lap
  * now takes ~65 s.
+ *
+ * LT-3 (2026-09-23) — the verbs are now the FALLBACK, not the answer.
+ * They were invented text: "Reviewing the roadmap…" appeared under an
+ * agent that had been inside one `Bash` call for forty minutes driving a
+ * training run, and the operator had no way to tell that from a hang.
+ * When the daemon sends `conv.progress` (py-1.36.3+) we show what the
+ * turn is actually doing instead, and say plainly when the long wait is
+ * expected work rather than trouble. The verbs remain for the first
+ * seconds of a turn and for daemons that don't report progress — there,
+ * "no data yet" is the honest state and a spinner is the right shape
+ * for it.
  */
 
 import { Show, createEffect, createSignal, onCleanup, onMount } from 'solid-js';
 import { chatStore } from '~/state/chat';
+import { isLongRunningWork, progressLabel } from '~/lib/turn-progress';
 import { ensureMarked } from '~/lib/cdn-loaders';
 import { colorizeInlineCodeInHtml } from '~/lib/code-colorize';
 
@@ -75,6 +87,59 @@ function useRotatingVerb(): () => string {
   return () => THINKING_VERBS[idx()]!;
 }
 
+/**
+ * LT-3 — the real activity line, or null when the daemon has told us
+ * nothing. Re-reads on its own 1 s tick so `turn 12m` keeps counting
+ * between the daemon's 30 s frames.
+ */
+function useProgressLine(conv: () => string | undefined): () => string | null {
+  const [nowMs, setNowMs] = createSignal(Date.now());
+  onMount(() => {
+    const iv = setInterval(() => setNowMs(Date.now()), 1000);
+    onCleanup(() => clearInterval(iv));
+  });
+  return () => {
+    const c = conv();
+    if (!c) return null;
+    return progressLabel(chatStore.state.turnProgress[c], nowMs());
+  };
+}
+
+/** Is this turn deep in work the operator should be told is NORMAL?
+ *  Before LT-1 the daemon killed turns at 30 minutes, so a long wait
+ *  genuinely did mean trouble; now it does not, and the UI has to stop
+ *  implying otherwise. */
+function useLongWork(conv: () => string | undefined): () => boolean {
+  const [nowMs, setNowMs] = createSignal(Date.now());
+  onMount(() => {
+    const iv = setInterval(() => setNowMs(Date.now()), 5000);
+    onCleanup(() => clearInterval(iv));
+  });
+  return () => {
+    const c = conv();
+    if (!c) return false;
+    return isLongRunningWork(chatStore.state.turnProgress[c], nowMs());
+  };
+}
+
+/** The activity line itself: monospace, muted, sitting where the verb
+ *  used to. Plus the "still working" reassurance on a long job. */
+function ActivityLine(props: { label: string; longWork: boolean }) {
+  return (
+    <span class="inline-flex items-center gap-1.5 min-w-0">
+      <span class="font-mono text-[11px] text-emerald-300/80 truncate">{props.label}</span>
+      <Show when={props.longWork}>
+        <span
+          class="text-[10px] text-gray-500 flex-shrink-0"
+          title="Long-running work is expected. The daemon only cancels a turn that produces no output AND burns no CPU for 20 minutes — not one that takes a long time."
+        >
+          · working, not stuck
+        </span>
+      </Show>
+    </span>
+  );
+}
+
 function Dots(props: { size: string }) {
   return (
     <span class="inline-flex items-center gap-0.5">
@@ -105,23 +170,39 @@ export function StreamingIdleHint(props: { conv: string }) {
     if (typeof last !== 'number') return 0;
     return nowMs() - last;
   };
+  const line = useProgressLine(() => props.conv);
+  const longWork = useLongWork(() => props.conv);
   return (
     <Show when={idleMs() > IDLE_HINT_MS}>
-      <div class="flex items-center gap-2 text-emerald-300/70 italic text-[12px] mt-1.5">
+      <div class="flex items-center gap-2 text-emerald-300/70 italic text-[12px] mt-1.5 min-w-0">
         <Dots size="w-1 h-1" />
-        <span>{verb()}…</span>
+        <Show when={line()} fallback={<span>{verb()}…</span>}>
+          {(l) => <ActivityLine label={l()} longWork={longWork()} />}
+        </Show>
       </div>
     </Show>
   );
 }
 
-/** V86s — the body of a streaming bubble that has no text yet. */
-export function ThinkingPlaceholder() {
+/** V86s — the body of a streaming bubble that has no text yet.
+ *
+ *  LT-3 — this is where a turn spends its long silences (a tool call
+ *  produces no assistant text at all), so it is the single most
+ *  important place for the real activity line. `conv` is optional: the
+ *  PreparingBubble renders before a conv-scoped turn exists. */
+export function ThinkingPlaceholder(props: { conv?: string } = {}) {
   const verb = useRotatingVerb();
+  const line = useProgressLine(() => props.conv);
+  const longWork = useLongWork(() => props.conv);
   return (
-    <div class="flex items-center gap-2 text-emerald-300/90 italic">
+    <div class="flex items-center gap-2 text-emerald-300/90 italic min-w-0">
       <Dots size="w-1.5 h-1.5" />
-      <span class="transition-opacity duration-300">{verb()}…</span>
+      <Show
+        when={line()}
+        fallback={<span class="transition-opacity duration-300">{verb()}…</span>}
+      >
+        {(l) => <ActivityLine label={l()} longWork={longWork()} />}
+      </Show>
     </div>
   );
 }

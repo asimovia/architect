@@ -13,8 +13,11 @@
 
 import type { ChatConvSummary, ChatQueueItem, ChatSnapshotResponse } from '~/lib/daemon-client';
 import { log } from '~/lib/log';
+import { parseProgress } from '~/lib/turn-progress';
 import { cleanChatText } from '~/lib/chat-sanitize';
-import { state, setState, activeClusterId } from './store';
+import { state, setState, activeClusterId,
+  setTurnProgress,
+} from './store';
 import { saveConvMeta } from './persistence';
 import { ONBOARDING_CONV_ID, type ConvMeta } from './types';
 
@@ -33,7 +36,20 @@ export type OpenRequest = {
 /** Snapshot fields the daemon added after `ChatConvSummary` was typed. */
 type SnapshotConv = ChatConvSummary & {
   open_requests?: OpenRequest[];
-  current_turn?: { started_at?: string; stream_id?: string; partial_text?: string };
+  current_turn?: {
+    started_at?: string;
+    stream_id?: string;
+    partial_text?: string;
+    // LT-3 (py-1.36.3+) — the same live numbers `conv.progress` carries,
+    // so a cockpit that opens onto an already-running turn describes it
+    // immediately instead of waiting up to 30 s for the next tick.
+    elapsed_secs?: number | null;
+    idle_secs?: number | null;
+    tool?: string | null;
+    tool_secs?: number | null;
+    tool_calls_count?: number;
+    deltas_seen?: number;
+  };
   last_final_stream_id?: string;
   queue?: Array<{ id?: string; text: string; queued_at?: string }>;
 };
@@ -128,6 +144,26 @@ function rehydrateTurn(c: SnapshotConv): boolean {
   const ct = c.current_turn;
   if (!ct || !c.live || !ct.stream_id) return false;
   if (ct.stream_id === c.last_final_stream_id) return false;
+  // LT-3 — seed the activity line from the snapshot. `phase` is derived
+  // the same way the daemon derives it, so the two sources can't
+  // disagree about a turn they both describe.
+  if (typeof ct.elapsed_secs === 'number') {
+    setTurnProgress(
+      c.conv,
+      parseProgress(
+        {
+          elapsed_secs: ct.elapsed_secs,
+          idle_secs: ct.idle_secs ?? 0,
+          phase: ct.tool ? 'tool' : (ct.idle_secs ?? 0) < 5 ? 'streaming' : 'waiting',
+          tool: ct.tool ?? null,
+          tool_secs: ct.tool_secs ?? null,
+          tool_calls: ct.tool_calls_count ?? 0,
+          deltas: ct.deltas_seen ?? 0,
+        },
+        Date.now(),
+      ),
+    );
+  }
   const existing = state.convMap[c.conv] ?? [];
   // A delta that beat the snapshot fetch already owns the bubble.
   const hasLive = existing.some(

@@ -156,6 +156,15 @@ export function attachEventBus(
       chatStore.ingestEventForCluster(clusterKey, ev);
       return;
     }
+    if (t === 'conv.progress') {
+      // LT-3 — live turn telemetry. Routed BEFORE the conv.* family
+      // because `ingestConvEvent` is gated on the snapshot having
+      // hydrated, and a turn that was already running when the cockpit
+      // opened is precisely the one the operator needs described.
+      if (!isActiveCluster()) return;
+      chatStore.ingestProgressEvent(ev as unknown as Record<string, unknown>);
+      return;
+    }
     if (t.startsWith(CONV_TYPE_PREFIX)) {
       // py-1.11.0 — chat-state-rearchitecture. conv.* events update
       // the daemon-authoritative summaries store. ingestConvEvent is

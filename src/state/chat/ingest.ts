@@ -17,6 +17,7 @@
 
 import type { DaemonClient, DaemonEvent } from '~/lib/daemon-client';
 import { log } from '~/lib/log';
+import { parseProgress } from '~/lib/turn-progress';
 import {
   state,
   setState,
@@ -25,6 +26,8 @@ import {
   setHydrating,
   clearPendingReply,
   clearLastDelta,
+  clearTurnProgress,
+  setTurnProgress,
 } from './store';
 import { applyChatEvent, applyPatchToList } from './reducer';
 import { getOrCreateSlice, recordActivity } from './cluster-slices';
@@ -77,6 +80,8 @@ export function ingestEvent(ev: DaemonEvent): void {
     // V86p — a final without a prior delta also drops the pending flag.
     clearPendingReply(conv);
     clearLastDelta(conv);
+    // LT-3 — the turn is over; stop describing what it was doing.
+    clearTurnProgress(conv);
     // 2026-06-12 — windowed-history cap after a LIVE final appends, so a
     // long session doesn't balloon the DOM. Never while hydrating (the
     // initial page is already ≤ INITIAL_PAGE).
@@ -89,6 +94,7 @@ export function ingestEvent(ev: DaemonEvent): void {
     // working on it.
     clearPendingReply(conv);
     clearLastDelta(conv);
+    clearTurnProgress(conv);
   }
 }
 
@@ -166,4 +172,20 @@ export async function loadConvMessagesPage(
   }
   setInitialPaging(conv, !!res.data.has_more, res.data.oldest_ts ?? '');
   return { has_more: res.data.has_more, oldest_ts: res.data.oldest_ts };
+}
+
+/**
+ * LT-3 — `conv.progress`: the daemon's per-tick report of what a live
+ * turn is doing (which tool it is inside and for how long, how long the
+ * turn has run, how long it has been quiet).
+ *
+ * Kept out of `ingestConvEvent` deliberately: that path is gated on the
+ * snapshot having hydrated, and this one must work the moment the socket
+ * is up — a turn already running when the cockpit opens is exactly the
+ * case the operator needs described.
+ */
+export function ingestProgressEvent(ev: Record<string, unknown>): void {
+  const conv = typeof ev.conv === 'string' ? ev.conv : null;
+  if (!conv) return;
+  setTurnProgress(conv, parseProgress(ev, Date.now()));
 }

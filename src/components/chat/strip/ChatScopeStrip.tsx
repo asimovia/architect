@@ -24,6 +24,7 @@ import ContextGauge from './ContextGauge';
 import MemberPicker from './MemberPicker';
 import ModelEffortPickers from './ModelEffortPickers';
 import StopButton from './StopButton';
+import TurnActivityChip from './TurnActivityChip';
 import StripActions from './StripActions';
 import TitleEditor from './TitleEditor';
 import UsageChip from './UsageChip';
@@ -210,6 +211,9 @@ export default function ChatScopeStrip(props: Props) {
             </span>
           </Show>
           <Show when={isConvWorking(props.conv)}>
+            {/* LT-3 — what it is doing, immediately left of how to stop
+                it. The bubble carries the same line but scrolls away. */}
+            <TurnActivityChip conv={props.conv} />
             <StopButton conv={props.conv} />
           </Show>
         </Show>

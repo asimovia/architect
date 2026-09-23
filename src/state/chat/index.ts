@@ -33,7 +33,9 @@
 import { log } from '~/lib/log';
 import { state } from './store';
 import { bindCluster, clearClusterChat, hasCachedChat } from './cluster-slices';
-import { ingestEvent, ingestEventForCluster, loadConvMessagesPage } from './ingest';
+import { ingestEvent, ingestEventForCluster, loadConvMessagesPage,
+  ingestProgressEvent,
+} from './ingest';
 import { loadEarlierMessages } from './paging';
 import { dispatchMessage } from './dispatch';
 import { mountTurnWatchdog } from './turn-watchdog';
@@ -112,6 +114,8 @@ export const chatStore = {
   // V107.41 — chat-turn queue (Standard v16).
   ingestQueueEvent,
   hydrateQueue,
+  // LT-3 — live "what is this turn doing" from the daemon.
+  ingestProgressEvent,
 };
 
 /**
