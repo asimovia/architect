@@ -1,8 +1,12 @@
 /**
  * MemberDetailPanel — ATM6. Right-hand editor sliding over the roster.
  *
- * Per-section save: each section PATCHes only its own fields. `kind` and
- * `required` are shown but never editable (the daemon rejects them).
+ * Per-section save: each section PATCHes only its own fields.
+ *
+ * GA-5 (generic-agents) — the panel lost the `kind` / `required` badges
+ * and the References list. A member is a profile, every profile is
+ * deletable, and what it knows is a slice of the knowledge tree rather
+ * than a list of file paths typed by hand.
  * Optimistic store update with rollback + inline error on 4xx (handled
  * inside teamStore.update). A concurrent-edit warning fires when the
  * on-disk `updated:` timestamp moves while the panel is open.
@@ -22,7 +26,7 @@ import { engineFromSaved, isEngineDirty } from '~/lib/team-engine-draft';
 import { appliedText, deletedText } from '~/lib/team-errors';
 import { ModelSection } from '~/components/team/detail/ModelSection';
 import { PromptSection } from '~/components/team/detail/PromptSection';
-import { RefsSection } from '~/components/team/detail/RefsSection';
+import { ContextSection } from '~/components/team/detail/ContextSection';
 import { ExternalAccessSection } from '~/components/team/detail/ExternalAccessSection';
 import { ConfirmButtons } from '~/components/ui/ConfirmButtons';
 
@@ -53,7 +57,7 @@ export default function MemberDetailPanel(props: {
     effort: 'default',
   });
   const [prompt, setPrompt] = createSignal<string>('');
-  const [refs, setRefs] = createSignal<string[]>([]);
+  const [context, setContext] = createSignal<string[]>([]);
   const [promptTab, setPromptTab] = createSignal<'edit' | 'preview'>('edit');
 
   const [savingSection, setSavingSection] = createSignal<string | null>(null);
@@ -104,12 +108,11 @@ export default function MemberDetailPanel(props: {
   });
   createEffect(() => {
     const m = member();
-    if (m) setRefs(Array.isArray(m.refs) ? [...m.refs] : []);
+    if (m) setContext(Array.isArray(m.context) ? [...m.context] : []);
     const d = detail();
     if (d) setPrompt(d.body ?? '');
   });
 
-  const required = () => member()?.required === true;
   const exposure = () => member()?.exposure ?? 'internal';
 
   const saveSection = async (section: string, body: Record<string, unknown>): Promise<void> => {
@@ -150,7 +153,7 @@ export default function MemberDetailPanel(props: {
       props.onDeleted?.(deletedText(res.result));
       props.onClose();
     } else if (res.status === 409) {
-      setError(res.error ?? 'This member is required and cannot be deleted.');
+      setError(res.error ?? 'Could not delete this member.');
     } else {
       setError(res.error ?? `Delete failed (HTTP ${res.status}).`);
     }
@@ -181,14 +184,9 @@ export default function MemberDetailPanel(props: {
           <div class="flex-1 min-w-0">
             <h2 class="text-[15px] font-semibold text-gray-100 truncate">{member()?.name ?? props.memberId}</h2>
             <div class="flex items-center gap-1.5 mt-0.5">
-              <span class="font-mono text-[9px] uppercase tracking-wider text-gray-400 bg-gray-800/60 border border-gray-700/60 rounded px-1.5 py-0.5">
-                {member()?.kind ?? 'profile'}
+              <span class="font-mono text-[9px] uppercase tracking-wider text-gray-500">
+                {props.memberId}
               </span>
-              <Show when={required()}>
-                <span class="inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-wider text-amber-200 bg-amber-500/10 border border-amber-500/30 rounded px-1.5 py-0.5" title="Required member — kind/required immutable, cannot be deleted">
-                  🔒 required
-                </span>
-              </Show>
             </div>
           </div>
           <button
@@ -232,11 +230,11 @@ export default function MemberDetailPanel(props: {
             onSave={(body) => { void saveSection('prompt', body); }}
           />
 
-          <RefsSection
-            refs={refs()}
-            onRefs={setRefs}
-            saving={savingSection() === 'refs'}
-            onSave={(body) => { void saveSection('refs', body); }}
+          <ContextSection
+            context={context()}
+            onContext={setContext}
+            saving={savingSection() === 'context'}
+            onSave={(body) => { void saveSection('context', body); }}
           />
 
           <ExternalAccessSection
@@ -248,9 +246,10 @@ export default function MemberDetailPanel(props: {
             onSavingSection={setSavingSection}
           />
 
-          {/* Danger zone — hidden when the member is required. */}
-          <Show when={!required()}>
-            <section class="space-y-2 pt-2 border-t border-gray-800/60">
+          {/* Danger zone. GA-5 — no member is undeletable any more:
+              `required` protected the two system singletons, and a team
+              that is three agents is not a broken team. */}
+          <section class="space-y-2 pt-2 border-t border-gray-800/60">
               <h3 class="font-mono text-[10px] uppercase tracking-[0.14em] text-red-400/80">Danger zone</h3>
               <ConfirmButtons
                 question={`Delete "${member()?.name ?? props.memberId}"? This cannot be undone.`}
@@ -263,9 +262,8 @@ export default function MemberDetailPanel(props: {
                     class="text-[12px] font-mono text-red-300 bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 rounded px-3 py-1.5"
                   >Delete member</button>
                 )}
-              />
-            </section>
-          </Show>
+            />
+          </section>
         </div>
       </aside>
     </div>

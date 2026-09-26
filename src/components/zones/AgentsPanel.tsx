@@ -3,7 +3,7 @@
  *
  * The TEAM ROSTER manager: a card grid of team members from `GET /team`
  * (teamStore) — create (ATM4 dialog) / edit (ATM6 detail panel) /
- * delete, with required/kind/exposure badges and a live instance COUNT
+ * delete, with context/exposure badges and a live instance COUNT
  * per card.
  *
  * Instances themselves (the live conversations + active runs) are NOT
@@ -184,17 +184,22 @@ function MemberCard(props: {
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-1.5">
             <span class="text-[13px] font-semibold text-gray-100 truncate">{m().name}</span>
-            <Show when={m().required}>
-              <span title="Required member — cannot be deleted" class="text-amber-300 text-[11px]">🔒</span>
-            </Show>
           </div>
           <div class="flex flex-wrap items-center gap-1 mt-1">
             <span class="font-mono text-[9px] text-purple-200 bg-purple-500/10 border border-purple-500/30 rounded px-1.5 py-0.5">
               {modelLabel(m().model)}
             </span>
-            <span class="font-mono text-[9px] uppercase tracking-wider text-gray-400 bg-gray-800/60 border border-gray-700/60 rounded px-1.5 py-0.5">
-              {m().kind}
-            </span>
+            {/* GA-5 — the `kind` badge is gone (singleton/profile no longer
+                exists). What a member KNOWS is the useful thing to show on a
+                card, so the context slice takes its place. */}
+            <Show when={(m().context ?? []).length > 0}>
+              <span
+                class="font-mono text-[9px] text-sky-200/90 bg-sky-500/10 border border-sky-500/30 rounded px-1.5 py-0.5 truncate max-w-[180px]"
+                title={`Knows: ${(m().context ?? []).join(', ')}`}
+              >
+                {(m().context ?? []).join(' · ')}
+              </span>
+            </Show>
             {/* TEG-3 — externally exposed member (token-reachable by other
                 local software). Pulses briefly on team.request.* activity. */}
             <Show when={m().exposure === 'external'}>
@@ -243,8 +248,7 @@ function MemberCard(props: {
             <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
           </svg>
         </button>
-        <Show when={!m().required}>
-          <ConfirmButtons
+        <ConfirmButtons
             question="Delete?"
             confirmLabel="Yes"
             onConfirm={props.onDelete}
@@ -261,8 +265,7 @@ function MemberCard(props: {
                 </svg>
               </button>
             )}
-          />
-        </Show>
+        />
       </div>
     </div>
   );

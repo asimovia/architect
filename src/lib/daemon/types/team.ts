@@ -78,11 +78,23 @@ export type TeamMemberExposure = 'internal' | 'external';
 /** One roster member's frontmatter + live instance count. */
 export interface TeamMember {
   id: string;
+  /** GA-1 — the member's display name. The daemon serves `title` as the
+   *  authored field and keeps `name` as an alias of it, so both are
+   *  always present and always equal. */
   name: string;
+  title?: string;
+  /** GA-1 — DERIVED from the id by the daemon, not stored on the card:
+   *  choosing a glyph and a hex code is not part of describing an agent. */
   emoji: string;
   color?: string;
-  kind: TeamMemberKind;
-  required: boolean;
+  /** @deprecated GA-1 — `singleton`/`profile` no longer exists; the daemon
+   *  stopped serving it. Kept so an older build reading a newer daemon
+   *  type-checks. */
+  kind?: TeamMemberKind;
+  /** @deprecated GA-1 — no member is undeletable any more. */
+  required?: boolean;
+  /** @deprecated GA-2 — the eight agent types collapsed into one generic
+   *  role; what specialises a member is its prompt and its context. */
   agent_type?: string;
   /** DM-CLI-02 (multi-cli-clients) — which CLI dispatches this member's
    *  turns. Absent (every member from before this field existed) means
@@ -94,8 +106,15 @@ export interface TeamMember {
   /** Default model for instances of this member (required by the schema). */
   model: string;
   effort?: string;
+  /** GA-4 — the knowledge-tree branches pinned into this member's
+   *  briefing in full (`context/_index.yaml` node ids). Empty/absent means
+   *  the project's default pinned set. THIS is what specialises a member. */
+  context?: string[];
+  /** @deprecated GA-1 — replaced by `context`. */
   pinned_order?: number;
+  /** @deprecated GA-1 — replaced by `context`. */
   refs?: string[];
+  /** @deprecated GA-1 — dropped from the schema. */
   credentials_hint?: string;
   created?: string;
   updated?: string;
@@ -143,14 +162,19 @@ export interface TeamMemberDetail extends TeamMember {
  *  rejects anything else. `model` is mandatory (no auto). */
 export interface TeamCreateBody {
   name: string;
-  emoji: string;
+  /** @deprecated GA-1 — derived from the id by the daemon. */
+  emoji?: string;
   /** DM-CLI-02 — omit for claude-code (the default). */
   client?: string;
   /** MPV1 — omit for anthropic (the default provider). */
   provider?: string;
   model: string;
   effort?: string;
+  /** GA-4 — knowledge-tree branches pinned for this member. */
+  context?: string[];
+  /** @deprecated GA-1 */
   kind?: 'profile';
+  /** @deprecated GA-1 — replaced by `context`. */
   refs?: string[];
   /** The init-prompt markdown body. */
   prompt: string;
@@ -180,7 +204,8 @@ export interface TeamPatchBody {
 /** POST /team/draft — LLM normaliser input + output. */
 export interface TeamDraftBody {
   name: string;
-  emoji: string;
+  /** @deprecated GA-1 — the daemon derives the glyph; still accepted. */
+  emoji?: string;
   raw_text: string;
 }
 export interface TeamDraftResponse {
@@ -190,6 +215,9 @@ export interface TeamDraftResponse {
   model: string;
   effort: string;
   kind?: string;
-  refs: string[];
+  /** GA-4 — branches the normaliser suggests for this member. */
+  context?: string[];
+  /** @deprecated GA-1 — replaced by `context`. */
+  refs?: string[];
   prompt: string;
 }

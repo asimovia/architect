@@ -2,7 +2,7 @@
  * NewMemberDialog — single-form member creator (ATM13 supersedes the ATM4
  * two-step input → draft → review wizard).
  *
- * One screen, everything editable: name + emoji, plain-language mission,
+ * One screen, everything editable: name, plain-language mission,
  * engine picker, references, init prompt. "Draft with AI" is an optional
  * assist that fills prompt/refs/engine from the daemon normaliser — never
  * a gate. Create POSTs /team, the roster picks it up optimistically, the
@@ -18,12 +18,13 @@
  * source of truth, the cockpit only renders it.
  */
 
-import { For, Show, createMemo, createSignal } from 'solid-js';
+import { Show, createMemo, createSignal } from 'solid-js';
 import { Modal } from '~/components/Modal';
 import { daemonStore } from '~/state/daemon';
 import { teamStore } from '~/state/team';
 import { DEFAULT_PROVIDER } from '~/lib/models';
 import { ClientModelEffortPicker, engineBody, type EngineChoice } from '~/components/team/ClientModelEffortPicker';
+import { ContextSection } from '~/components/team/detail/ContextSection';
 import type { TeamCreateBody } from '~/lib/daemon-client';
 
 const INPUT_CLASS =
@@ -34,7 +35,6 @@ export default function NewMemberDialog(props: { onClose: () => void; onCreated?
   const client = () => daemonStore.state.client;
 
   const [name, setName] = createSignal('');
-  const [emoji, setEmoji] = createSignal('🤖');
   const [mission, setMission] = createSignal('');
   const [engine, setEngine] = createSignal<EngineChoice>({
     client: 'claude-code',
@@ -42,7 +42,7 @@ export default function NewMemberDialog(props: { onClose: () => void; onCreated?
     model: 'sonnet',
     effort: 'default',
   });
-  const [refs, setRefs] = createSignal<string[]>([]);
+  const [context, setContext] = createSignal<string[]>([]);
   const [prompt, setPrompt] = createSignal('');
 
   const [error, setError] = createSignal<string | null>(null);
@@ -71,14 +71,13 @@ export default function NewMemberDialog(props: { onClose: () => void; onCreated?
     setDrafting(true);
     setError(null);
     try {
-      const res = await c.teamDraft({ name: name().trim() || 'member', emoji: emoji().trim() || '🤖', raw_text: mission().trim() });
+      const res = await c.teamDraft({ name: name().trim() || 'member', raw_text: mission().trim() });
       if (res.ok) {
         const d = res.data;
         setEngine((e) => ({ ...e, model: d.model || e.model, effort: d.effort || e.effort }));
-        setRefs(Array.isArray(d.refs) ? d.refs : []);
+        setContext(Array.isArray(d.context) ? d.context : []);
         if (d.prompt) setPrompt(d.prompt);
         if (d.name && !name().trim()) setName(d.name);
-        if (d.emoji && emoji().trim() === '🤖') setEmoji(d.emoji);
       } else {
         setError('Auto-draft unavailable — fill the init prompt manually.');
       }
@@ -98,10 +97,8 @@ export default function NewMemberDialog(props: { onClose: () => void; onCreated?
     // the fallback so Create never needs the draft step.
     const body: TeamCreateBody = {
       name: name().trim(),
-      emoji: emoji().trim() || '🤖',
       ...engineBody(engine()),
-      kind: 'profile',
-      refs: refs().map((r) => r.trim()).filter(Boolean),
+      context: context(),
       prompt: prompt().trim() || mission().trim(),
     };
     const res = await teamStore.create(c, body);
@@ -125,8 +122,6 @@ export default function NewMemberDialog(props: { onClose: () => void; onCreated?
     props.onClose();
   };
 
-  const setRefAt = (i: number, v: string) => setRefs(refs().map((r, j) => (j === i ? v : r)));
-  const removeRef = (i: number) => setRefs(refs().filter((_, j) => j !== i));
 
   return (
     <Modal
@@ -149,28 +144,20 @@ export default function NewMemberDialog(props: { onClose: () => void; onCreated?
       </Show>
 
       <div class="space-y-4">
-        <div class="flex gap-3">
-          <div class="flex-1">
-            <label class={LABEL_CLASS}>Name</label>
-            <input
-              type="text"
-              autofocus
-              value={name()}
-              onInput={(e) => setName(e.currentTarget.value)}
-              placeholder="e.g. SEO writer"
-              class={INPUT_CLASS}
-            />
-          </div>
-          <div class="w-24">
-            <label class={LABEL_CLASS}>Emoji</label>
-            <input
-              type="text"
-              value={emoji()}
-              onInput={(e) => setEmoji(e.currentTarget.value)}
-              maxLength={4}
-              class="w-full bg-[#020617] border border-gray-700/40 rounded px-2.5 py-1.5 text-[16px] text-center text-gray-100 focus:outline-none focus:border-emerald-500/55"
-            />
-          </div>
+        {/* GA-5 — the emoji field is gone: the daemon derives the glyph
+            and the colour from the id. Picking decoration was never part
+            of describing what an agent does, and it was one more box
+            between the operator and a working member. */}
+        <div>
+          <label class={LABEL_CLASS}>Name</label>
+          <input
+            type="text"
+            autofocus
+            value={name()}
+            onInput={(e) => setName(e.currentTarget.value)}
+            placeholder="e.g. SEO writer"
+            class={INPUT_CLASS}
+          />
         </div>
 
         <div>
@@ -186,41 +173,12 @@ export default function NewMemberDialog(props: { onClose: () => void; onCreated?
 
         <ClientModelEffortPicker value={engine()} onChange={setEngine} labels />
 
-        <div>
-          <div class="flex items-center justify-between mb-1.5">
-            <label class="font-mono text-[10px] uppercase tracking-[0.14em] text-gray-500">References</label>
-            <button
-              type="button"
-              onClick={() => setRefs([...refs(), ''])}
-              class="text-[11px] font-mono text-emerald-300/80 hover:text-emerald-200"
-            >+ add</button>
-          </div>
-          <div class="space-y-1.5">
-            <For each={refs()}>
-              {(r, i) => (
-                <div class="flex gap-1.5">
-                  <input
-                    type="text"
-                    value={r}
-                    onInput={(e) => setRefAt(i(), e.currentTarget.value)}
-                    placeholder=".meshkore/context/stack.md"
-                    class="flex-1 bg-[#020617] border border-gray-700/40 rounded px-2 py-1 text-[12px] font-mono text-gray-100 focus:outline-none focus:border-emerald-500/55"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeRef(i())}
-                    class="px-2 text-gray-500 hover:text-red-300"
-                    title="Remove"
-                    aria-label="Remove reference"
-                  >✕</button>
-                </div>
-              )}
-            </For>
-            <Show when={refs().length === 0}>
-              <p class="text-[11px] text-gray-600 italic">No references. Add paths/URLs the member should consult.</p>
-            </Show>
-          </div>
-        </div>
+        <ContextSection
+          context={context()}
+          onContext={setContext}
+          saving={false}
+          onSave={() => { /* create saves everything at once */ }}
+        />
 
         <div>
           <div class="flex items-center justify-between mb-1.5">
