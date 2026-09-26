@@ -78,7 +78,7 @@ export function progressLabel(
   if (!p || isStale(p, now)) return null;
   const turn = `turn ${humanSecs(p.elapsed_secs)}`;
   if (p.phase === 'tool' && p.tool) {
-    const held = p.tool_secs != null ? ` ${humanSecs(p.tool_secs)}` : '';
+    const held = p.tool_secs !== null && p.tool_secs !== undefined ? ` ${humanSecs(p.tool_secs)}` : '';
     return `${p.tool}${held} · ${turn}`;
   }
   if (p.phase === 'streaming') return `writing · ${turn}`;

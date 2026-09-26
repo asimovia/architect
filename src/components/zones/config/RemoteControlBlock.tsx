@@ -3,8 +3,9 @@
  *
  * This is DAEMON state (one token per daemon, NOT per project): the single
  * operator credential that lets the personal agent (Hermes) drive EVERY
- * project's architect-master through the shared daemon (X-MeshKore-Project
- * routes each ask). It therefore lives in the Config zone's daemon section,
+ * project's agent (`a01`, or whichever of its historic ids that project
+ * still carries) through the shared daemon (X-MeshKore-Project routes each
+ * ask). It therefore lives in the Config zone's daemon section,
  * never inside a project's Team panel.
  *
  * Mirrors the TEG-3 token idioms from MemberDetailPanel: status line,
@@ -112,7 +113,7 @@ export function RemoteControlBlock() {
       `curl -sk $MK_BASE/projects -H "Authorization: Bearer $MK_TOKEN"`,
       ``,
       `# 2. Ask a project's master — returns {"request_id": "..."}`,
-      `curl -sk -X POST $MK_BASE/team/architect-master/ask \\`,
+      `curl -sk -X POST $MK_BASE/team/a01/ask \\`,
       `  -H "Authorization: Bearer $MK_TOKEN" \\`,
       `  -H "X-MeshKore-Project: <project-id>" \\`,
       `  -H "content-type: application/json" \\`,
@@ -173,7 +174,8 @@ export function RemoteControlBlock() {
     >
       <p class="text-[12px] text-gray-500 leading-relaxed mb-3">
         Your personal agent (Hermes) uses this single token to discover
-        projects and talk to every project's <code class="font-mono text-emerald-300/90">architect-master</code>{' '}
+        projects and talk to every project's agent{' '}
+        <code class="font-mono text-emerald-300/90">a01</code>{' '}
         through the shared daemon. It is separate from per-member (Team)
         tokens: this one is the operator's remote control, not a limited
         third-party credential.
