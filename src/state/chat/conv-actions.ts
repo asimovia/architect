@@ -153,6 +153,24 @@ export function setConvModel(conv: string, model: string): void {
   saveConvMeta();
 }
 
+/** ES-2 — switch THIS conv's code client (and claude-code backend) from
+ *  the chat header. The whole engine chain re-seeds (engine-chain
+ *  `selectClient`), so a Codex conv never inherits an Anthropic model id.
+ *  Applies from the next message; the daemon marks the switch in the
+ *  thread and gives that turn the full briefing. */
+export function setConvEngine(
+  conv: string,
+  next: { client: string; provider: string; model: string; effort: string },
+): void {
+  ensureConvMeta(conv);
+  setState('convMeta', conv, 'client', next.client);
+  setState('convMeta', conv, 'provider', next.provider);
+  setState('convMeta', conv, 'model', next.model || 'auto');
+  setState('convMeta', conv, 'effort', next.effort || 'default');
+  setState('convMeta', conv, 'enginePinned', true);
+  saveConvMeta();
+}
+
 /** agent-team (ATM7) — reasoning depth; same next-turn semantics. */
 export function setConvEffort(conv: string, effort: string): void {
   ensureConvMeta(conv);

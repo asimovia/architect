@@ -78,7 +78,11 @@ function seedOrHealMeta(c: ChatConvSummary): void {
     return;
   }
   if (c.agent_id && !existing.agentId) setState('convMeta', c.conv, 'agentId', c.agent_id);
-  if (c.member && !existing.member) setState('convMeta', c.conv, 'member', c.member);
+  // The daemon holds the frozen binding, so its member WINS, not just fills
+  // a gap: GA-9 renamed `architect-master` → `a01` on disk, and a tab that
+  // had cached the old id kept sending it — every turn 400'd with "unknown
+  // team member" (jev-clone, 2026-09-27).
+  if (c.member && existing.member !== c.member) setState('convMeta', c.conv, 'member', c.member);
   if (c.client && !existing.client) setState('convMeta', c.conv, 'client', c.client);
   if (c.provider && !existing.provider) setState('convMeta', c.conv, 'provider', c.provider);
   // CN10 — heal stale localStorage entries saved with an empty title: without

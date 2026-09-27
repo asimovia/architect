@@ -19,7 +19,7 @@
  */
 
 import { For, Show, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
-import { comboLabel, comboStep, groupOptions, type ComboOption } from '~/lib/combo-options';
+import { comboStep, comboTriggerLabel, groupOptions, type ComboOption } from '~/lib/combo-options';
 
 export type { ComboOption };
 
@@ -46,7 +46,7 @@ export function Combo(props: {
   let trigger: HTMLButtonElement | undefined;
   let panel: HTMLDivElement | undefined;
 
-  const label = () => comboLabel(props.options, props.value, props.placeholder ?? '—');
+  const label = () => comboTriggerLabel(props.options, props.value, props.placeholder ?? '—');
   const groups = createMemo(() => groupOptions(props.options));
 
   const place = (): void => {

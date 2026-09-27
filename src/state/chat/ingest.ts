@@ -31,6 +31,7 @@ import {
 } from './store';
 import { applyChatEvent, applyPatchToList } from './reducer';
 import { getOrCreateSlice, recordActivity } from './cluster-slices';
+import { noteFinishedWork } from './unread';
 import { unarchiveConv } from './conv-actions';
 import { capConvWindow, setInitialPaging } from './paging';
 
@@ -63,6 +64,7 @@ export function ingestEvent(ev: DaemonEvent): void {
   const patch = applyChatEvent(arr, ev);
   if (patch.op === 'patch') setState('convMap', conv, patch.index, patch.fields);
   else if (patch.op === 'append') setState('convMap', conv, [...arr, patch.msg]);
+  else if (patch.op === 'patch-append') setState('convMap', conv, applyPatchToList(arr, patch));
 
   if (ev.type === 'chat.assistant.delta') {
     // A delta with no stream_id can't be attributed to a bubble; it is
@@ -107,6 +109,7 @@ export function ingestEventForCluster(clusterKey: string, ev: DaemonEvent): void
   // MP5 — record activity regardless, so the rail's working slug and
   // unread dot react to background daemons too.
   recordActivity(clusterKey, ev);
+  noteFinishedWork(clusterKey, ev);
   if (activeClusterId() === clusterKey) {
     ingestEvent(ev);
     return;
@@ -159,7 +162,7 @@ export async function loadConvMessagesPage(
       // (`paging.historyMsg` covers the older pages.)
       if (
         t !== 'chat.user' && t !== 'chat.assistant' && t !== 'chat.assistant.final'
-        && t !== 'chat.cancelled' && t !== 'chat.error'
+        && t !== 'chat.cancelled' && t !== 'chat.error' && t !== 'chat.notice'
       ) {
         continue;
       }

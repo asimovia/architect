@@ -21,6 +21,7 @@ const ALLOWED_EXACT = new Set<string>([
   // Projects rail (per-browser bookmark list + aliases + order)
   'mc-known-projects-v1',
   'mc-daemon-home-v1',   // where this machine's ONE daemon lives (lib/daemon-home)
+  'mc-unread-convs-v1',  // agents that finished work not yet read (lib/unread-convs)
   'mc-project-aliases-v1',
   'mc-projects-order-v1',
   // Theme + layout (per-browser preferences)

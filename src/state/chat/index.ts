@@ -52,6 +52,7 @@ import {
   seedOnboardingConv,
   setActiveConv,
   setConvEffort,
+  setConvEngine,
   setConvMember,
   setConvModel,
   setConvTitle,
@@ -60,6 +61,7 @@ import {
 import { AUTONOMOUS_AGENT_TYPES, type ChatMsg } from './types';
 
 export { loadLastActiveConv } from './persistence';
+export { isConvUnread, unreadCountFor, markConvRead, forgetUnreadFor } from './unread';
 export {
   ONBOARDING_CONV_ID,
   INITIAL_PAGE,
@@ -98,6 +100,7 @@ export const chatStore = {
   setConvTitle,
   setConvModel,
   setConvEffort,
+  setConvEngine,
   setConvMember,
   archiveConv,
   unarchiveConv,

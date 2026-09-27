@@ -49,6 +49,9 @@ export function historyMsg(ev: DaemonEvent): ChatMsg | null {
       ts: String(ev.ts ?? ''),
     };
   }
+  if (t === 'chat.notice') {
+    return { kind: 'system', system_kind: 'divider', text: String(ev.text ?? ''), ts: String(ev.ts ?? '') };
+  }
   if (t === 'chat.cancelled') {
     return {
       kind: 'assistant',

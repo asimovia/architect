@@ -14,7 +14,7 @@
 import type { ChatConvSummary, ChatContextBlock, ChatUsageTotal, DaemonEvent } from '~/lib/daemon-client';
 import { log } from '~/lib/log';
 import { state, setState, activeClusterId } from './store';
-import { saveArchivedConvs } from './persistence';
+import { saveArchivedConvs, saveConvMeta } from './persistence';
 
 const str = (v: unknown): string | null => (typeof v === 'string' ? v : null);
 
@@ -242,6 +242,15 @@ export function ingestConvEvent(ev: DaemonEvent): void {
     }
     case 'conv.activity':
       return onActivity(conv, ev);
+    case 'conv.engine_unpinned':
+      // ES-2 — the member card's engine was saved: the card wins again over
+      // a client picked in the header. The `conv.meta_updated` that follows
+      // carries the card's values.
+      if (state.convMeta[conv]?.enginePinned) {
+        setState('convMeta', conv, 'enginePinned', false);
+        saveConvMeta();
+      }
+      return;
     default:
       return;
   }

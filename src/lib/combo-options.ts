@@ -24,6 +24,9 @@ export interface ComboOption {
   /** Second line under the option: why it is greyed out, where to fix it.
    *  It used to be concatenated into the `<option>` label itself. */
   note?: string | null;
+  /** ES-2 — what the closed trigger shows instead of `label`, for tight
+   *  rows (the chat header's effort shows `3/5`, the list says "High"). */
+  short?: string;
 }
 
 export interface ComboGroup {
@@ -42,6 +45,16 @@ export function comboLabel(
   const hit = options.find((o) => o.id === (value ?? ''));
   if (hit) return hit.label;
   return v || placeholder;
+}
+
+/** What the CLOSED trigger displays: the option's `short` when it has one. */
+export function comboTriggerLabel(
+  options: readonly ComboOption[],
+  value: string | null | undefined,
+  placeholder = '—',
+): string {
+  const hit = options.find((o) => o.id === (value ?? ''));
+  return hit?.short || comboLabel(options, value, placeholder);
 }
 
 /** Group consecutive options by their `group` field, preserving order. */

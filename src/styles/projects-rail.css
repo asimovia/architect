@@ -470,11 +470,10 @@ body.col-reordering .projects-rail-resize {
   text-shadow: 0 0 8px rgba(52, 211, 153, 0.8);
 }
 
-/* ── MP5 — unread dot for inactive rows with background activity ─── */
-/* Small amber dot in the corner of the row when the cluster received
-   events since the operator last viewed it. Suppressed on the active
-   project (it's already the one being watched) and when the louder
-   `is-new` pill is showing. */
+/* ── unread dot — an agent here finished something not read yet ─── */
+/* Driven by `state/chat/unread` (2026-09-27): lit by a turn that ENDED
+   while the operator was elsewhere, cleared when that agent is opened.
+   Hidden while the louder `is-new` pill is showing. */
 .proj-row-wrap.has-unread:not(.is-new)::after {
   content: '';
   position: absolute;

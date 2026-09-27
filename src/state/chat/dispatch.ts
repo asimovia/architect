@@ -60,6 +60,13 @@ function buildBody(opts: Required<Pick<DispatchOpts, 'conv' | 'text'>> & Dispatc
   // meant to be sent.
   if (meta?.model && meta.model !== 'auto') body.model = meta.model;
   if (meta?.effort && meta.effort !== 'default') body.effort = meta.effort;
+  // ES-2 — a client picked in the header travels on every turn, pinned, so
+  // the daemon keeps it for the turns this tab does not send (wakes, queue).
+  if (meta?.enginePinned && meta.client) {
+    body.client = meta.client;
+    body.provider = meta.provider || 'anthropic';
+    body.pin_engine = true;
+  }
   if (scope.module) body.module_id = scope.module;
   if (scope.taskId) body.task_id = scope.taskId;
   if (scope.initiative) body.initiative_id = scope.initiative;

@@ -10,6 +10,10 @@ import assert from 'node:assert/strict';
 import {
   defaultEffortFor,
   defaultModelFor,
+  effortShort,
+  engineId,
+  engineOptions,
+  parseEngineId,
   effortOptionsFor,
   modelIdsFor,
   modelOptionsFor,
@@ -91,4 +95,45 @@ test('a pinned id the catalog does not list is still offered, as itself', () => 
   const listed = modelOptionsFor('claude-code', 'anthropic', EMPTY);
   assert.deepEqual(withLiveModel(listed, 'opus'), listed);
   assert.deepEqual(withLiveModel(listed, ''), listed);
+});
+
+// ── ES-2 ──────────────────────────────────────────────────────────────
+
+test('engine id folds the claude-code backend into one dial and back', () => {
+  assert.equal(engineId('claude-code', 'anthropic'), 'claude-code');
+  assert.equal(engineId(undefined, undefined), 'claude-code');
+  assert.equal(engineId('claude-code', 'zai'), 'claude-code/zai');
+  assert.equal(engineId('codex', 'zai'), 'codex');
+  assert.deepEqual(parseEngineId('claude-code/zai'), { client: 'claude-code', provider: 'zai' });
+  assert.deepEqual(parseEngineId('muse'), { client: 'muse', provider: 'anthropic' });
+});
+
+test('engine options list every client, backends of claude-code, and why one is off', () => {
+  const opts = engineOptions([
+    { id: 'claude-code', label: 'Claude Code', installed: true, providers: [
+      { id: 'anthropic', label: 'Anthropic', available: true },
+      { id: 'meta', label: 'Meta (Muse Spark API)', available: false },
+    ] },
+    { id: 'codex', label: 'Codex CLI', installed: true },
+    { id: 'gemini', label: 'Gemini CLI', installed: false },
+  ]);
+  assert.deepEqual(opts.map((o) => [o.id, o.short, !!o.disabled]), [
+    ['claude-code', 'Claude', false],
+    ['claude-code/meta', 'Claude·META', true],
+    ['codex', 'Codex', false],
+    ['gemini', 'Gemini', true],
+  ]);
+  assert.match(opts[1]!.note ?? '', /key/);
+  assert.match(opts[3]!.note ?? '', /not installed/);
+});
+
+test('effort reads as a position on the client scale', () => {
+  const levels = [
+    { id: 'default', label: 'Default' }, { id: 'low', label: 'Low' },
+    { id: 'medium', label: 'Medium' }, { id: 'high', label: 'High' },
+  ];
+  assert.equal(effortShort(levels, 'high'), '3/3');
+  assert.equal(effortShort(levels, 'low'), '1/3');
+  assert.equal(effortShort(levels, 'default'), 'auto');
+  assert.equal(effortShort(levels, 'ultra'), 'auto');
 });

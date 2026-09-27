@@ -20,7 +20,7 @@
  *   - ID `A001` lives only in the metadata row, dim and tiny — the
  *     operator's primary handle is the name.
  *
- * Selection wins over working; review (pending) wins over both;
+ * Selection wins over working; an unread finish adds an amber dot;
  * drag-over wins over everything (transient).
  */
 
@@ -89,7 +89,6 @@ export default function AgentCard(props: AgentCardProps) {
       ];
       if (props.dragging) base.push('opacity-35');
       if (props.dragOver) base.push('border-l-cyan-400 bg-cyan-500/5');
-      else if (props.pendingReview) base.push('border-l-amber-400 text-amber-200');
       else if (props.active) base.push('border-l-emerald-400 text-gray-50 font-semibold');
       else if (props.status === 'working') base.push('border-l-emerald-500/70 text-emerald-100 animate-pulse-soft');
       else base.push('border-l-transparent text-gray-200 hover:text-gray-50');
@@ -103,8 +102,6 @@ export default function AgentCard(props: AgentCardProps) {
     if (props.dragging) base.push('opacity-35');
     if (props.dragOver) {
       base.push('border-l-cyan-400 bg-cyan-500/5');
-    } else if (props.pendingReview) {
-      base.push('border-l-amber-400');
     } else if (props.active) {
       /* Operator 2026-06-10: selected row has NO background, NO
        * roundness. Just a bright left bar + brighter text/borders
@@ -148,9 +145,15 @@ export default function AgentCard(props: AgentCardProps) {
       onDrop={onDropRow}
       title={`${title()} · ${props.meta.agentId} · ${typeInfo().label} · ${
         isRemote() ? 'remote' : 'local'
-      }${props.pendingReview ? ' · review pending' : ''}${fixed() ? ' · fixed system agent' : ''}`}
+      }${props.pendingReview ? ' · finished, not read yet' : ''}${fixed() ? ' · fixed system agent' : ''}`}
       class={cardClasses()}
     >
+      {/* 2026-09-27 — unread finished work: the same amber dot the project
+          row carries, so "which project" and "which agent in it" read as
+          one signal. Clears the moment this agent is on screen. */}
+      <Show when={props.pendingReview}>
+        <span class="agent-unread-dot" aria-label="finished — not read yet" />
+      </Show>
       <Show
         when={!props.compact}
         fallback={

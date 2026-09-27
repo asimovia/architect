@@ -2981,3 +2981,18 @@
     @container (max-width: 360px) {
       .initiatives-header .initiatives-title { display: none; }
     }
+
+/* 2026-09-27 — an agent finished something the operator has not opened.
+   Same amber + pulse as the project row's `.has-unread` dot (projects-rail.css). */
+.agent-unread-dot {
+  position: absolute;
+  top: 7px; right: 7px;
+  width: 7px; height: 7px;
+  border-radius: 999px;
+  background: #fbbf24;
+  box-shadow: 0 0 6px rgba(251, 191, 36, 0.65);
+  pointer-events: none;
+  animation: unread-pulse 1.8s ease-in-out infinite;
+  z-index: 1;
+}
+.chat-rail-stack.compact .agent-unread-dot { top: 3px; right: 3px; width: 6px; height: 6px; }

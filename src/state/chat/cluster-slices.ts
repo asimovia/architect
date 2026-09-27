@@ -21,6 +21,7 @@
 
 import type { DaemonEvent } from '~/lib/daemon-client';
 import { state, setState, activeClusterId, setActiveClusterId } from './store';
+import { forgetUnreadFor } from './unread';
 import { loadConvMeta } from './persistence';
 import type { ClusterChatSlice } from './types';
 
@@ -155,6 +156,7 @@ export function recordActivity(clusterKey: string, ev: DaemonEvent): void {
 /** Wipe the in-memory slice for a cluster (used by Forget). */
 export function clearClusterChat(clusterId: string): void {
   clusterSnapshots.delete(clusterId);
+  forgetUnreadFor(clusterId);
   setState('clusterActivity', (prev) => {
     const next = { ...prev };
     delete next[clusterId];

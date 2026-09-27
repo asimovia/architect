@@ -19,7 +19,8 @@
  */
 
 import type { DaemonEvent } from '~/lib/daemon-client';
-import { cleanChatText, keepAttachments, parseAttachments } from '~/lib/chat-sanitize';
+// Relative + .ts so `node --test` can load this leaf (no `~` alias there).
+import { cleanChatText, keepAttachments, parseAttachments } from '../../lib/chat-sanitize.ts';
 import type { ChatMsg } from './types';
 
 export type ChatEventPatch =
@@ -28,7 +29,10 @@ export type ChatEventPatch =
   /** Merge `fields` into the message at `index`. */
   | { op: 'patch'; index: number; fields: Partial<ChatMsg> }
   /** Append a new message to the end of the list. */
-  | { op: 'append'; msg: ChatMsg };
+  | { op: 'append'; msg: ChatMsg }
+  /** Merge `fields` into `index`, then append `msg` (a turn that died:
+   *  close its streaming bubble and say why). */
+  | { op: 'patch-append'; index: number; fields: Partial<ChatMsg>; msg: ChatMsg };
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 const strOrUndef = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
@@ -122,11 +126,24 @@ export function applyChatEvent(list: readonly ChatMsg[], ev: DaemonEvent): ChatE
         text: str(ev.text) || 'The turn ended without a reply.',
         ts: strOrUndef(ev.ts),
       };
+      // The turn is dead, so its half-written bubble must stop claiming to
+      // be alive. Both branches used to append only; the bubble stayed
+      // `streaming` forever and `buildStream` (which takes ANY streaming
+      // assistant as the live one) kept painting it at the bottom with a
+      // STOP button, over every later message (jev-clone, 2026-09-27).
       if (last && last.kind === 'assistant' && last.streaming) {
-        return { op: 'append', msg: next };
+        return { op: 'patch-append', index: lastIdx, fields: { streaming: false }, msg: next };
       }
       return { op: 'append', msg: next };
     }
+
+    // ES-1 — "new code client from here": a divider, persisted by the
+    // daemon, that does NOT end the turn (the turn it announces is starting).
+    case 'chat.notice':
+      return {
+        op: 'append',
+        msg: { kind: 'system', system_kind: 'divider', text: str(ev.text) || '', ts: strOrUndef(ev.ts) },
+      };
 
     case 'chat.cancelled': {
       const lastIdx = list.length - 1;
@@ -155,6 +172,12 @@ export function applyPatchToList(list: ChatMsg[], patch: ChatEventPatch): ChatMs
     const next = list.slice();
     next[patch.index] = { ...prev, ...patch.fields };
     return next;
+  }
+  if (patch.op === 'patch-append') {
+    const prev = list[patch.index];
+    const next = list.slice();
+    if (prev) next[patch.index] = { ...prev, ...patch.fields };
+    return [...next, patch.msg];
   }
   return list;
 }

@@ -1,11 +1,10 @@
 /**
  * ChatScopeStrip — the row above the chat thread.
  *
- * Left to right: the agent-TYPE pill (the A001-style id is internal —
- * diaries, logs, WS — and deliberately not on the chat wall), the bound
- * roster member, the conv title, the live model/effort pickers, the
- * usage chip, the context gauge, a debug-drop badge, STOP while the
- * agent is working, and the action icons.
+ * Left to right: one identity box (member emoji + name › conv title;
+ * type and the internal A001-style id in its tooltip — ES-3), the live
+ * client/model/effort pickers, the usage chip, the context gauge, a
+ * debug-drop badge, STOP while the agent is working, and the action icons.
  *
  * AX17 (cockpit-excellence) split the 453-line component: each chip
  * above is its own file under `chat/strip/`. Several were inline
@@ -24,7 +23,6 @@ import ContextGauge from './ContextGauge';
 import MemberPicker from './MemberPicker';
 import ModelEffortPickers from './ModelEffortPickers';
 import StopButton from './StopButton';
-import TurnActivityChip from './TurnActivityChip';
 import StripActions from './StripActions';
 import TitleEditor from './TitleEditor';
 import UsageChip from './UsageChip';
@@ -51,13 +49,6 @@ export default function ChatScopeStrip(props: Props) {
   // Architect and roadmap-architect slugs keep the cyan cap even
   // when conv_meta has drifted.
   const typeInfo = () => agentVisualInfo(props.conv, props.meta);
-  // The pill shows the type initial: 1-2 chars verbatim, otherwise the
-  // first letter.
-  const typeInitial = (): string => {
-    const src = (typeInfo().shortLabel ?? typeInfo().label).trim();
-    if (!src) return '·';
-    return src.length <= 2 ? src.toUpperCase() : src[0]!.toUpperCase();
-  };
 
   const snap = () => chatStore.state.convs[props.conv] ?? null;
   // ATM14g — the header reads the same three sources the daemon resolves a
@@ -102,6 +93,17 @@ export default function ChatScopeStrip(props: Props) {
   // are editable until then, frozen to a read-only badge afterwards. The
   // onboarding conv is never a draft (it is the always-on master).
   const boundMember = () => teamStore.get(props.meta?.member);
+  const memberName = (): string => boundMember()?.name ?? props.meta?.member ?? '';
+  // The title earns its place only when it differs from the member name
+  // (a fresh instance is titled after its member: "Architect Agent" twice).
+  const showTitle = (): boolean =>
+    !props.meta?.member || title().trim().toLowerCase() !== memberName().trim().toLowerCase();
+  const identityTooltip = (): string =>
+    [
+      props.meta?.member ? `Member: ${memberName()} (frozen after the first message)` : null,
+      `Title: ${title()}`,
+      `Type: ${typeInfo().label}${props.meta?.agentId ? ` · ${props.meta.agentId}` : ''}`,
+    ].filter(Boolean).join('\n');
   const isDraft = (): boolean => {
     if (props.conv === ONBOARDING_CONV_ID) return false;
     const msgs = chatStore.state.convMap[props.conv] ?? [];
@@ -146,46 +148,34 @@ export default function ChatScopeStrip(props: Props) {
             />
           }
         >
-          <span
-            class="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-mono flex-shrink-0"
-            style={{
-              background: 'rgba(17,24,39,0.7)',
-              // color-mix, not a hex+alpha concat: typeInfo().color is a
-              // bare hex for most types but a `var(--theme-…)` reference
-              // for the two fixed system agents (ATM12 follow-up).
-              border: `1px solid color-mix(in srgb, ${typeInfo().color} 33%, transparent)`,
-              color: typeInfo().color,
-              'min-width': '20px',
-            }}
-            title={`${typeInfo().label}${props.meta?.agentId ? ` · ${props.meta.agentId}` : ''}`}
-          >
-            {typeInitial()}
-          </span>
-          <Show when={props.meta?.member}>
+          {/* ES-3 — ONE box: who (member) and what (title). The title only
+              appears when it says something the member name does not; the
+              agent type and internal id live in the tooltip. */}
+          <div class="flex-1 min-w-0 flex items-center">
             <Show
-              when={isDraft()}
+              when={props.meta?.member && isDraft()}
               fallback={
                 <span
-                  class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium text-gray-100 bg-gray-800/60 border border-gray-700/60 flex-shrink-0"
-                  title={`Member: ${boundMember()?.name ?? props.meta?.member} — frozen after the first message`}
+                  class="inline-flex items-center gap-1.5 min-w-0 max-w-full px-2 py-0.5 rounded text-[12px] text-gray-100 bg-gray-800/60 border border-gray-700/60"
+                  title={identityTooltip()}
                 >
-                  <span aria-hidden="true">{boundMember()?.emoji ?? '🤖'}</span>
-                  <span class="truncate max-w-[120px]">{boundMember()?.name ?? props.meta?.member}</span>
+                  <span aria-hidden="true" class="flex-shrink-0">{boundMember()?.emoji ?? '🤖'}</span>
+                  <Show when={props.meta?.member}>
+                    <span class="font-semibold truncate flex-shrink-0 max-w-[45%]">{memberName()}</span>
+                  </Show>
+                  <Show when={showTitle()}>
+                    <Show when={props.meta?.member}>
+                      <span aria-hidden="true" class="text-gray-500 flex-shrink-0">›</span>
+                    </Show>
+                    <span class={`truncate ${props.meta?.member ? 'text-gray-300' : 'font-semibold'}`}>{title()}</span>
+                  </Show>
                 </span>
               }
             >
               <MemberPicker current={props.meta!.member!} onPick={rebindMember} />
+              <span class="ml-2 text-sm font-semibold text-gray-100 truncate">{title()}</span>
             </Show>
-          </Show>
-          <span class="flex-1 text-sm font-semibold text-gray-100 truncate">{title()}</span>
-          <Show when={props.meta?.member}>
-            <span
-              class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono text-sky-200 bg-sky-500/10 border border-sky-500/30 flex-shrink-0"
-              title={`Client — from the roster member, updates live on save (${clientId()})`}
-            >
-              {clientId()}
-            </span>
-          </Show>
+          </div>
           <ModelEffortPickers
             conv={props.conv}
             model={modelId()}
@@ -211,9 +201,9 @@ export default function ChatScopeStrip(props: Props) {
             </span>
           </Show>
           <Show when={isConvWorking(props.conv)}>
-            {/* LT-3 — what it is doing, immediately left of how to stop
-                it. The bubble carries the same line but scrolls away. */}
-            <TurnActivityChip conv={props.conv} />
+            {/* ES-3 — the "thinking · turn 2m" chip is gone from here: the
+                working bubble shows the same line, and the header has to
+                fit beside the roadmap. */}
             <StopButton conv={props.conv} />
           </Show>
         </Show>

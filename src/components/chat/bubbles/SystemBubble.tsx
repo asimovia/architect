@@ -25,9 +25,32 @@ const TINTS: Record<'error' | 'warning' | 'info', Tint> = {
   info: { border: '#6b7280', dot: '#9ca3af', text: '#d1d5db' },
 };
 
+/** ES-2 — "new code client from here". A rule across the thread, not a
+ *  bubble: it separates two sessions, it is not something that went wrong. */
+function EngineDivider(props: { text: string }) {
+  return (
+    <div role="separator" class="flex items-center gap-2 mx-3 my-3 text-[11px] font-mono text-gray-400">
+      <span class="flex-1 h-px bg-gray-700/70" />
+      <span class="max-w-[80%] text-center leading-snug">{props.text}</span>
+      <span class="flex-1 h-px bg-gray-700/70" />
+    </div>
+  );
+}
+
 export function SystemBubble(props: { conv?: string; msg: ChatMsg }) {
+  return (
+    <Show when={props.msg.system_kind === 'divider'} fallback={<AlertBubble conv={props.conv} msg={props.msg} />}>
+      <EngineDivider text={props.msg.text} />
+    </Show>
+  );
+}
+
+function AlertBubble(props: { conv?: string; msg: ChatMsg }) {
   const [resending, setResending] = createSignal(false);
-  const sev = (): 'error' | 'warning' | 'info' => props.msg.system_kind ?? 'info';
+  const sev = (): 'error' | 'warning' | 'info' => {
+    const k = props.msg.system_kind;
+    return k === 'error' || k === 'warning' ? k : 'info';
+  };
   const resend = async (): Promise<void> => {
     const text = props.msg.retry_text;
     const client = daemonStore.state.client;

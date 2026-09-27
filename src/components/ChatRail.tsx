@@ -1,5 +1,5 @@
 import { For, Show, createMemo, createSignal } from 'solid-js';
-import { chatStore, ONBOARDING_CONV_ID } from '~/state/chat';
+import { chatStore, ONBOARDING_CONV_ID, isConvUnread } from '~/state/chat';
 import AgentCard from '~/components/AgentCard';
 import { agentVisualColor } from '~/lib/agent-types';
 import { uiStore } from '~/state/ui';
@@ -182,7 +182,7 @@ export default function ChatRail() {
                 meta={meta()}
                 active={chatStore.state.activeConv === c}
                 status={statusOf(c)}
-                pendingReview={false}
+                pendingReview={isConvUnread(c)}
                 waiting={openRequests(c)}
                 stripe={agentVisualColor(c, meta())}
                 compact={compact()}

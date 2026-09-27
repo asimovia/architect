@@ -163,3 +163,69 @@ export function withLiveModel(groups: OptGroup[], live: string | null | undefine
   if (groups.some((g) => g.items.some((o) => o.id === v))) return groups;
   return [...groups, { group: null, items: [{ id: v, label: `${v} (member)` }] }];
 }
+
+// ── ES-2 · the chat header's compact engine dials ─────────────────────
+
+/** One CLI client as `GET /clients` describes it (the fields used here). */
+export interface ClientEntry {
+  id: string;
+  label: string;
+  installed?: boolean;
+  providers?: Array<{ id: string; label: string; available?: boolean }>;
+}
+
+/** An engine option: a combo row plus the bits the trigger needs. */
+export interface EngineOpt extends Opt {
+  short: string;
+  disabled?: boolean;
+  note?: string | null;
+}
+
+/** The header's single "code client" dial folds claude-code's backend into
+ *  the client: `claude-code`, `claude-code/zai`, `codex`, `muse`… */
+export function engineId(client: string | null | undefined, provider: string | null | undefined): string {
+  const c = (client || 'claude-code').toLowerCase();
+  const p = (provider || DEFAULT_PROVIDER).toLowerCase();
+  return isClaudeCode(c) && p !== DEFAULT_PROVIDER ? `${c}/${p}` : c;
+}
+
+export function parseEngineId(id: string): { client: string; provider: string } {
+  const [client = 'claude-code', provider] = id.split('/');
+  return { client, provider: provider || DEFAULT_PROVIDER };
+}
+
+/** Every client the daemon offers, claude-code once per backend. A client
+ *  that is not installed, or a backend without a key, is listed but not
+ *  pickable — the operator sees it exists and why it is off. */
+export function engineOptions(clients: readonly ClientEntry[]): EngineOpt[] {
+  const out: EngineOpt[] = [];
+  for (const c of clients) {
+    const firstWord = (c.label || c.id).split(/\s+/)[0] || c.id;
+    const off = c.installed === false ? `${c.label} is not installed on the daemon's machine` : null;
+    if (isClaudeCode(c.id) && c.providers?.length) {
+      for (const p of c.providers) {
+        const native = p.id === DEFAULT_PROVIDER;
+        out.push({
+          id: engineId(c.id, p.id),
+          label: native ? c.label : `${c.label} · ${p.label}`,
+          short: native ? firstWord : `${firstWord}·${p.id.toUpperCase()}`,
+          disabled: !!off || p.available === false,
+          note: off ?? (p.available === false ? `No ${p.label} key — set it in ⚙ General` : null),
+        });
+      }
+      continue;
+    }
+    out.push({ id: c.id, label: c.label, short: firstWord, disabled: !!off, note: off });
+  }
+  return out;
+}
+
+/** Effort as a position on the client's own scale — `3/5` — so the header
+ *  shows one short token whatever the CLI calls its levels. The CLI
+ *  default (no flag) reads `auto`. */
+export function effortShort(options: readonly Opt[], id: string | null | undefined): string {
+  const levels = options.filter((o) => o.id !== DEFAULT_EFFORT);
+  const i = levels.findIndex((o) => o.id === id);
+  if (i < 0) return 'auto';
+  return `${i + 1}/${levels.length}`;
+}

@@ -40,6 +40,12 @@ export interface ConvMeta {
    *  it). Display-only: the header needs it to pick the right model
    *  catalog; dispatches resolve provider daemon-side from the member. */
   provider?: string;
+  /** ES-2 — the operator picked `client`/`provider` for THIS conv in the
+   *  chat header. While set, the header shows it over the member card and
+   *  every dispatch sends it with `pin_engine`; the daemon keeps it until
+   *  the member card's engine is saved again (which clears this flag via
+   *  `conv.meta_updated`). */
+  enginePinned?: boolean;
   type: AgentType;
   title: string;
   /** agent-team (ATM7/ATM10) — the roster member this conv is bound to
@@ -57,9 +63,9 @@ export interface ChatMsg {
   /**
    * 'user'      — operator-typed message (and its echoes from the daemon).
    * 'assistant' — agent reply (deltas + final).
-   * 'system'    — CLIENT-ONLY notice. Surfaces dispatch errors and other
-   *               in-band warnings in the thread instead of the console.
-   *               Never broadcast over WS, never persisted by the daemon.
+   * 'system'    — in-band notice: dispatch errors (client-only), a turn
+   *               that died (`chat.error`, persisted) and, since ES-2, the
+   *               "new code client from here" divider (`chat.notice`).
    */
   kind: 'user' | 'assistant' | 'system';
   text: string;
@@ -69,7 +75,7 @@ export interface ChatMsg {
   stream_id?: string;
   cancelled?: boolean;
   /** Severity styling for client-side 'system' messages. */
-  system_kind?: 'error' | 'warning' | 'info';
+  system_kind?: 'error' | 'warning' | 'info' | 'divider';
   /** REL1 — for a `system`/error bubble born from a failed dispatch: the
    *  text that never made it, so the thread can offer "resend" instead of
    *  making the operator retype it. */

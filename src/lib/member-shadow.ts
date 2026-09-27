@@ -24,6 +24,8 @@ export interface ShadowConvMeta {
   effort?: string;
   client?: string;
   provider?: string;
+  /** ES-2 — client/provider were picked in the chat header for this conv. */
+  enginePinned?: boolean;
 }
 
 /** Live roster values for one member (subset of TeamMember frontmatter). */
@@ -79,9 +81,13 @@ export function resolveDisplayEngine(
   const pinnedProvider = (meta?.provider ?? '').trim().toLowerCase();
   const snapProvider = (snap?.provider ?? '').trim().toLowerCase();
   const memberProvider = (member?.provider ?? '').trim().toLowerCase();
+  // ES-2 — a client picked in the header for this conv beats the card
+  // (its provider already leads the provider chain below via meta.provider).
+  const pinnedClient = meta?.enginePinned ? (meta.client ?? '').trim() : '';
   if (meta?.member && member) {
     const client =
-      (member.client ?? '').trim()
+      pinnedClient
+      || (member.client ?? '').trim()
       || (meta?.client ?? '').trim()
       || (snap?.client ?? '').trim()
       || 'claude-code';

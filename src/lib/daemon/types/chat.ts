@@ -33,6 +33,12 @@ export interface DispatchBody {
   /** MP3 (daemon py-1.14.2) — reasoning depth → `--effort`.
    *  low|medium|high|xhigh|max; `default`/empty = no flag. */
   effort?: string;
+  /** ES-1 (py-1.38.5) — code client / claude-code backend for this turn.
+   *  With `pin_engine: true` the daemon keeps them on the conv for every
+   *  later turn until the member card is saved again. */
+  client?: string;
+  provider?: string;
+  pin_engine?: boolean;
   module_id?: string;
   task_id?: string;
   initiative_id?: string;

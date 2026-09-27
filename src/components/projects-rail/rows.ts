@@ -1,7 +1,7 @@
 import { createMemo, createRoot } from 'solid-js';
-import { daemonStore, selectedRowKey } from '~/state/daemon';
+import { daemonStore } from '~/state/daemon';
 import { projectsStore } from '~/state/projects';
-import { chatStore } from '~/state/chat';
+import { chatStore, unreadCountFor } from '~/state/chat';
 import * as kp from '~/lib/known-projects';
 import type { RailRowData, RailRowDot } from '~/components/ProjectsRailRow';
 import { instanceLinkStatus } from '~/lib/connection-status';
@@ -58,13 +58,6 @@ export const rows = createRoot(() =>
   const activeInst = activeId ? daemonStore.state.instances[activeId] : null;
   const activePort = activeInst?.health.port ?? null;
   const activeClusterId = activeInst?.health.cluster_id ?? null;
-  // V86d — `selectedKey` is the single source of truth for "which row
-  // is highlighted". Used here ONLY for the per-row `hasUnread` check
-  // (active cluster never shows an unread dot). The CSS-level "active"
-  // class is now applied inside ProjectsRailRow by reading
-  // `selectedRowKey()` directly — keeps highlight reactivity off the
-  // rows-array remount cycle.
-  const selectedKey = selectedRowKey();
   const newIds = new Set(projectsStore.state.newClusterIds);
   // V86 — pre-compute which ports are "claimed" by an entry with a
   // real cluster_id, so we can suppress orphan rows (entries lacking
@@ -116,16 +109,15 @@ export const rows = createRoot(() =>
     const alias = kp.getAlias(k);
     const display = alias || k.cluster_name || k.cluster_id || `:${port}`;
     const rowKey = k.cluster_id ?? `port:${port}`;
-    const isSelected = selectedKey === rowKey;
     // MP5 — read activity for this cluster. `working` lights the
     // bouncing slug whenever any conv on this cluster is mid-stream
-    // (active or inactive). `hasUnread` shows a small dot when the
-    // cluster received an event after the last bindCluster. The
-    // currently-selected cluster never shows unread (the operator is
-    // looking at it).
+    // (active or inactive). `hasUnread` (2026-09-27) is the amber dot:
+    // an agent of this project FINISHED something the operator has not
+    // opened yet. It used to be "any WS event since the last visit",
+    // which lit every project permanently.
     const activity = chatStore.state.clusterActivity[rowKey];
     const working = !!(activity && activity.workingConvs.length > 0);
-    const hasUnread = !!(activity && !isSelected && activity.lastEventAt > activity.lastReadAt);
+    const hasUnread = unreadCountFor(rowKey) > 0;
     // V107.4 — `architectActive` reflects "Run All in progress on this
     // cluster" — a non-archived roadmap-architect conv exists, even
     // between turns. Drives a soft pulse on the working bar so the
