@@ -32,7 +32,9 @@ export type ChatEventPatch =
   | { op: 'append'; msg: ChatMsg }
   /** Merge `fields` into `index`, then append `msg` (a turn that died:
    *  close its streaming bubble and say why). */
-  | { op: 'patch-append'; index: number; fields: Partial<ChatMsg>; msg: ChatMsg };
+  | { op: 'patch-append'; index: number; fields: Partial<ChatMsg>; msg: ChatMsg }
+  /** Replace the whole list (a final that also sweeps stale bubbles). */
+  | { op: 'set'; list: ChatMsg[] };
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 const strOrUndef = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
@@ -99,18 +101,50 @@ export function applyChatEvent(list: readonly ChatMsg[], ev: DaemonEvent): ChatE
       const idx = list.findIndex(
         (m) => m.kind === 'assistant' && streamId !== undefined && m.stream_id === streamId,
       );
-      if (idx >= 0) return { op: 'patch', index: idx, fields: { text: cleaned, streaming: false } };
-      return {
-        op: 'append',
-        msg: {
+      // reddit, 2026-09-27 — a streaming bubble whose stream_id never
+      // matched its final (seeded from a snapshot, or a placeholder) stayed
+      // "Working…" with a dead STOP forever, and buildStream hoisted every
+      // later message above it as "queued". A final ENDS the conv's turn and
+      // the daemon never runs two turns on one conv, so any other bubble
+      // still streaming here is stale: drop it if empty, close it if not.
+      const stale = list.some((m, i) => i !== idx && m.kind === 'assistant' && m.streaming);
+      if (!stale) {
+        if (idx >= 0) return { op: 'patch', index: idx, fields: { text: cleaned, streaming: false } };
+        return {
+          op: 'append',
+          msg: {
+            kind: 'assistant',
+            text: cleaned,
+            author: strOrUndef(ev.author),
+            ts: strOrUndef(ev.ts),
+            streaming: false,
+            stream_id: streamId,
+          },
+        };
+      }
+      const swept: ChatMsg[] = [];
+      list.forEach((m, i) => {
+        if (i === idx) {
+          swept.push({ ...m, text: cleaned, streaming: false });
+          return;
+        }
+        if (m.kind === 'assistant' && m.streaming) {
+          if (m.text.trim()) swept.push({ ...m, streaming: false });
+          return;
+        }
+        swept.push(m);
+      });
+      if (idx < 0) {
+        swept.push({
           kind: 'assistant',
           text: cleaned,
           author: strOrUndef(ev.author),
           ts: strOrUndef(ev.ts),
           streaming: false,
           stream_id: streamId,
-        },
-      };
+        });
+      }
+      return { op: 'set', list: swept };
     }
 
     // REL1 — the daemon telling us a turn died (subprocess exited without
@@ -173,6 +207,7 @@ export function applyPatchToList(list: ChatMsg[], patch: ChatEventPatch): ChatMs
     next[patch.index] = { ...prev, ...patch.fields };
     return next;
   }
+  if (patch.op === 'set') return patch.list;
   if (patch.op === 'patch-append') {
     const prev = list[patch.index];
     const next = list.slice();

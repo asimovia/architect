@@ -66,7 +66,7 @@ export function ingestEvent(ev: DaemonEvent): void {
   const patch = applyChatEvent(arr, ev);
   if (patch.op === 'patch') setState('convMap', conv, patch.index, patch.fields);
   else if (patch.op === 'append') setState('convMap', conv, [...arr, patch.msg]);
-  else if (patch.op === 'patch-append') setState('convMap', conv, applyPatchToList(arr, patch));
+  else if (patch.op === 'patch-append' || patch.op === 'set') setState('convMap', conv, applyPatchToList(arr, patch));
 
   if (ev.type === 'chat.assistant.delta') {
     // A delta with no stream_id can't be attributed to a bubble; it is

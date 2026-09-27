@@ -27,3 +27,31 @@ describe('chat.error closes the turn it reports (jev-clone 2026-09-27)', () => {
     assert.equal(after[1]!.system_kind, 'divider');
   });
 });
+
+describe('a final ends the turn (reddit 2026-09-27)', () => {
+  it('a streaming bubble whose id never matched is swept, so no ghost STOP remains', () => {
+    const list: ChatMsg[] = [
+      { kind: 'user', text: 'revisa todo', ts: '2026-09-27T20:46:00Z' },
+      { kind: 'assistant', text: '', streaming: true, stream_id: 'seeded-from-snapshot', ts: '2026-09-27T20:46:05Z' },
+    ];
+    const after = applyPatchToList(list, applyChatEvent(list, {
+      type: 'chat.assistant.final', conv: 'c', stream_id: 's_real', text: 'Revisadas las seis', ts: '2026-09-27T20:52:14Z',
+    }));
+    assert.equal(after.length, 2); // the empty placeholder is gone
+    assert.equal(after[1]!.text, 'Revisadas las seis');
+    assert.ok(after.every((m) => !m.streaming));
+    const later = [...after, { kind: 'user', text: 'so?', ts: '2026-09-27T21:06:17Z' } as ChatMsg];
+    assert.equal(buildStream('c', later, () => false, () => false).live, null);
+  });
+
+  it('a stale bubble with text is kept, just closed', () => {
+    const list: ChatMsg[] = [
+      { kind: 'assistant', text: 'half an answer', streaming: true, stream_id: 'old', ts: 't1' },
+      { kind: 'assistant', text: '', streaming: true, stream_id: 'new', ts: 't2' },
+    ];
+    const after = applyPatchToList(list, applyChatEvent(list, {
+      type: 'chat.assistant.final', conv: 'c', stream_id: 'new', text: 'done', ts: 't3',
+    }));
+    assert.deepEqual(after.map((m) => [m.text, !!m.streaming]), [['half an answer', false], ['done', false]]);
+  });
+});
