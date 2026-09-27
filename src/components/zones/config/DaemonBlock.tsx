@@ -3,6 +3,14 @@ import { daemonStore } from '~/state/daemon';
 import { mcAlert, mcConfirm } from '~/lib/modal';
 import { Block, KV, BtnRow, Btn } from './atoms';
 import { CLUSTER_YAML } from './yaml-shortcut';
+import CommandBlock from '~/components/CommandBlock';
+import { recallDaemonHome } from '~/lib/daemon-home';
+
+/** " (<start command>)" when we know it, else "". */
+function startHint(): string {
+  const h = recallDaemonHome();
+  return h ? ` (${h.start})` : '';
+}
 
 export function DaemonBlock() {
   const [busy, setBusy] = createSignal<'rebuild' | 'shutdown' | null>(null);
@@ -20,7 +28,7 @@ export function DaemonBlock() {
 
   async function forceShutdown() {
     const ok = await mcConfirm(
-      'Stop the local daemon? You will lose the WS feed until you restart it (npx meshcore start).',
+      `Stop the local daemon? You will lose the WS feed until you restart it${startHint()}.`,
       { title: 'Force shutdown daemon', okLabel: 'Shutdown', danger: true },
     );
     if (!ok) return;
@@ -30,7 +38,7 @@ export function DaemonBlock() {
     try {
       const r = await c.shutdown();
       if (!r.ok && r.status !== 0) void mcAlert(`Shutdown failed: ${r.status} ${r.body.slice(0, 200)}`, { title: 'Error' });
-      else void mcAlert('Daemon stopping. Run `npx meshcore start` to bring it back.', { title: 'Shutting down' });
+      else void mcAlert(`Daemon stopping.${startHint() ? ` Bring it back with:\n\n  ${recallDaemonHome()?.start}` : ''}`, { title: 'Shutting down' });
     } finally { setBusy(null); }
   }
 
@@ -54,6 +62,22 @@ export function DaemonBlock() {
         <Btn onClick={forceRebuild} disabled={busy() !== null}>{busy() === 'rebuild' ? '…' : 'force rebuild state.json'}</Btn>
         <Btn onClick={forceShutdown} disabled={busy() !== null} danger>{busy() === 'shutdown' ? '…' : 'force shutdown daemon'}</Btn>
       </BtnRow>
+      {/* 2026-09-27 — the two commands the operator pastes into any terminal.
+          Absolute paths, from /health.home; the daemon runs in its own
+          session, so closing that terminal (or VS Code) does not stop it. */}
+      {(() => {
+        const home = recallDaemonHome();
+        if (!home) return null;
+        return (
+          <div class="mt-3 space-y-2">
+            <p class="text-[11.5px] text-gray-500 leading-relaxed">
+              From any terminal. It keeps running after you close the terminal or VS Code.
+            </p>
+            <CommandBlock label="Start">{home.start}</CommandBlock>
+            <CommandBlock label="Stop">{home.stop}</CommandBlock>
+          </div>
+        );
+      })()}
     </Block>
   );
 }

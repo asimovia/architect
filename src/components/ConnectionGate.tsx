@@ -10,7 +10,7 @@
 import { Match, Show, Switch, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import type { ConnectionStatus } from '~/lib/connection';
 import CommandBlock from '~/components/CommandBlock';
-import { agentPromptForHome, installCommand, recallDaemonHome } from '~/lib/daemon-home';
+import { agentPromptForHome, recallDaemonHome } from '~/lib/daemon-home';
 import { watchDaemonHealth } from '~/lib/health-watch';
 import { log } from '~/lib/log';
 
@@ -139,7 +139,7 @@ function NoDaemon(props: { ports: number[]; onRetry: () => void }) {
       <p class="text-gray-400 text-sm leading-relaxed mb-4">
         MeshKore runs <span class="text-gray-200">one daemon per machine</span> that serves every project.
         We probed <span class="font-mono text-emerald-300">{probedRange()}</span> and nothing answered
-        {home() ? ' — most likely the Mac rebooted and it is not resident yet.' : '.'}
+        {home() ? ' — most likely the Mac rebooted.' : '.'}
       </p>
 
       <Show
@@ -164,7 +164,6 @@ function NoDaemon(props: { ports: number[]; onRetry: () => void }) {
                 <div class="text-[12px] text-gray-400 font-mono break-all mt-0.5">{h().path}</div>
                 <div class="text-[11px] text-gray-500 mt-1">
                   last seen {relativeLastSeen(h().seen_at)}
-                  {h().resident ? ' · resident (launchd will bring it back)' : ' · not resident'}
                 </div>
               </div>
               <button
@@ -176,12 +175,10 @@ function NoDaemon(props: { ports: number[]; onRetry: () => void }) {
               </button>
             </div>
             <CommandBlock>{h().start}</CommandBlock>
-            <Show when={!h().resident}>
-              <p class="text-[11.5px] text-gray-500 leading-relaxed mt-2.5 mb-1">
-                Make it resident so a reboot does not bring you back here:
-              </p>
-              <CommandBlock>{installCommand(h())}</CommandBlock>
-            </Show>
+            <p class="text-[11.5px] text-gray-500 leading-relaxed mt-2">
+              Paste it in any terminal. It keeps running after you close that terminal or VS Code;
+              stop it with <span class="font-mono text-gray-400">{h().stop}</span>.
+            </p>
             <Show when={showAgent()}>
               <div class="mt-2.5">
                 <CommandBlock multiline label="Paste this into Claude Code / Cursor / Cline">

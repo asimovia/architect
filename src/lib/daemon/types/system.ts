@@ -54,7 +54,7 @@ export interface HealthResponse {
   /** py-1.38.2 — where THIS daemon is installed and how to start it. The
    *  cockpit remembers it (lib/daemon-home) so the no-daemon screen can
    *  say exactly where to go the next time it is down. */
-  home?: { path: string; start: string; resident: boolean };
+  home?: { path: string; start: string; stop?: string; resident: boolean };
   ts?: string;
 }
 

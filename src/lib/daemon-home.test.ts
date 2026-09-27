@@ -22,11 +22,12 @@ function mem() {
 test('remember → recall round-trips what the daemon said', () => {
   const kv = mem();
   const now = new Date('2026-09-27T09:00:00Z');
-  rememberDaemonHome({ path: '/x/meshkore-server', start: 'cd "/x/meshkore-server" && make start', resident: true }, now, kv);
+  rememberDaemonHome({ path: '/x/meshkore-server', start: '"/x/meshkore-server/meshctl.sh" start', stop: '"/x/meshkore-server/meshctl.sh" stop', resident: true }, now, kv);
   const got = recallDaemonHome(kv);
   assert.deepEqual(got, {
     path: '/x/meshkore-server',
-    start: 'cd "/x/meshkore-server" && make start',
+    start: '"/x/meshkore-server/meshctl.sh" start',
+    stop: '"/x/meshkore-server/meshctl.sh" stop',
     resident: true,
     seen_at: '2026-09-27T09:00:00.000Z',
   });
@@ -34,7 +35,7 @@ test('remember → recall round-trips what the daemon said', () => {
 
 test('a daemon too old to say its home leaves the record alone', () => {
   const kv = mem();
-  kv.setItem(DAEMON_HOME_KEY, JSON.stringify({ path: '/old', start: 'x', resident: false, seen_at: '' }));
+  kv.setItem(DAEMON_HOME_KEY, JSON.stringify({ path: '/old', start: 'x', stop: 'y', resident: false, seen_at: '' }));
   assert.equal(rememberDaemonHome(undefined, new Date(), kv), null);
   assert.equal(rememberDaemonHome({}, new Date(), kv), null);
   assert.equal(recallDaemonHome(kv)?.path, '/old');
@@ -44,6 +45,7 @@ test('a missing start command falls back to the interpreter form', () => {
   const kv = mem();
   rememberDaemonHome({ path: '/h' }, new Date(), kv);
   assert.equal(recallDaemonHome(kv)?.start, defaultStartCommand('/h'));
+  assert.equal(recallDaemonHome(kv)?.stop, 'pkill -f "/h/.meshkore/scripts/daemon.py"');
   assert.equal(defaultStartCommand('/h'), 'cd "/h" && python3 .meshkore/scripts/daemon.py');
 });
 
@@ -59,18 +61,23 @@ test('garbage in storage reads as nothing', () => {
 
 test('install command swaps the make target; a plain start stays as is', () => {
   assert.equal(
-    installCommand({ path: '/h', start: 'cd "/h" && make start', resident: false, seen_at: '' }),
+    installCommand({ path: '/h', start: 'cd "/h" && make start', stop: '', resident: false, seen_at: '' }),
     'cd "/h" && make install',
   );
   const plain = 'cd "/h" && python3 .meshkore/scripts/daemon.py';
-  assert.equal(installCommand({ path: '/h', start: plain, resident: false, seen_at: '' }), plain);
+  assert.equal(installCommand({ path: '/h', start: plain, stop: '', resident: false, seen_at: '' }), plain);
 });
 
 test('the agent prompt names the folder when known and asks to find it when not', () => {
-  const known = agentPromptForHome({ path: '/h', start: 'cd "/h" && make start', resident: false, seen_at: '' });
+  const known = agentPromptForHome({ path: '/h', start: 'cd "/h" && make start', stop: '', resident: false, seen_at: '' });
   assert.match(known, /installed at \/h/);
   assert.match(known, /make install/);
   const unknown = agentPromptForHome(null);
   assert.match(unknown, /Find the folder/);
   assert.doesNotMatch(unknown, /make install/);
+});
+
+test('the meshctl form maps start → install and survives a round trip', () => {
+  const h = { path: '/h', start: '"/h/meshctl.sh" start', stop: '"/h/meshctl.sh" stop', resident: false, seen_at: '' };
+  assert.equal(installCommand(h), '"/h/meshctl.sh" install');
 });

@@ -22,8 +22,10 @@ export const DAEMON_HOME_KEY = 'mc-daemon-home-v1';
 export interface DaemonHome {
   /** The folder holding `.meshkore/scripts/daemon.py` — the server home. */
   path: string;
-  /** The exact command to bring it up from that folder. */
+  /** Absolute command that starts it — pasteable from any directory. */
   start: string;
+  /** Absolute command that stops it (and the agents it spawned). */
+  stop: string;
   /** True when a launchd agent keeps it alive across logins and reboots. */
   resident: boolean;
   /** ISO timestamp of the connection that recorded this. */
@@ -34,6 +36,7 @@ export interface DaemonHome {
 export interface HealthHome {
   path?: string;
   start?: string;
+  stop?: string;
   resident?: boolean;
 }
 
@@ -59,6 +62,7 @@ export function rememberDaemonHome(home: HealthHome | undefined, now = new Date(
   const rec: DaemonHome = {
     path: home.path,
     start: home.start || defaultStartCommand(home.path),
+    stop: home.stop || defaultStopCommand(home.path),
     resident: !!home.resident,
     seen_at: now.toISOString(),
   };
@@ -80,6 +84,7 @@ export function recallDaemonHome(kv = store()): DaemonHome | null {
     return {
       path: v.path,
       start: typeof v.start === 'string' && v.start ? v.start : defaultStartCommand(v.path),
+      stop: typeof v.stop === 'string' && v.stop ? v.stop : defaultStopCommand(v.path),
       resident: !!v.resident,
       seen_at: typeof v.seen_at === 'string' ? v.seen_at : '',
     };
@@ -101,10 +106,16 @@ export function defaultStartCommand(path: string): string {
   return `cd "${path}" && python3 .meshkore/scripts/daemon.py`;
 }
 
+/** What to type to stop it when the daemon did not say. */
+export function defaultStopCommand(path: string): string {
+  return `pkill -f "${path}/.meshkore/scripts/daemon.py"`;
+}
+
 /** One-liner that makes the daemon resident (launchd) — offered when the
  *  remembered home says it is not. `make install` is the server home's
  *  Makefile target; a home without one falls back to a plain start. */
 export function installCommand(home: DaemonHome): string {
+  if (/meshctl\.sh" start$/.test(home.start)) return home.start.replace(/ start$/, ' install');
   return home.start.includes('make ') ? home.start.replace(/make \w+$/, 'make install') : home.start;
 }
 
