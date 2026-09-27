@@ -26,6 +26,7 @@
  * import anywhere in the cockpit).
  */
 
+import { rememberDaemonHome } from '~/lib/daemon-home';
 import { batch } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { DaemonClient, type HealthResponse, setDaemonVersionListener, setReauthHandler } from '~/lib/daemon-client';
@@ -321,6 +322,8 @@ function syncFacade(): void {
  * stays open. That's the parallel-multi-project win.
  */
 function attachClient(client: DaemonClient, health: HealthResponse): void {
+  // Remember where this machine's daemon lives, for the day it is down.
+  rememberDaemonHome(health.home);
   const v = parseDaemonVersion(health.version);
   const supportsSelfUpdate = (health.features ?? []).includes('self_update');
   // py-1.2.0 — daemon reports `cluster.yaml.daemon.auto_update` in

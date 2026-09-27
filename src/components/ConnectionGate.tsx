@@ -7,12 +7,10 @@
  * below; the gate itself just dispatches on `status.kind`.
  */
 
-import { For, Match, Show, Switch, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
+import { Match, Show, Switch, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import type { ConnectionStatus } from '~/lib/connection';
-import * as kp from '~/lib/known-projects';
-import type { KnownProject } from '~/lib/known-projects';
 import CommandBlock from '~/components/CommandBlock';
-import { agentPrompt, startCommandLine } from '~/lib/start-command';
+import { agentPromptForHome, installCommand, recallDaemonHome } from '~/lib/daemon-home';
 import { watchDaemonHealth } from '~/lib/health-watch';
 import { log } from '~/lib/log';
 
@@ -97,11 +95,20 @@ function relativeLastSeen(iso: string): string {
 }
 
 function NoDaemon(props: { ports: number[]; onRetry: () => void }) {
-  // A-NODAEMON-GUIDE-01 — when the boot probe found zero daemons but the
-  // operator has known projects, show a "start me" row per project with
-  // the shared copyable start command (and a Claude Code prompt). Fall
-  // back to the generic `npx meshcore start` only when there are none.
-  const known = createMemo<KnownProject[]>(() => kp.list());
+  // 2026-09-27 — ONE screen, because it is ONE daemon. This used to render a
+  // "start me" row per known PROJECT, each with its own `cd <project> &&
+  // python3 .meshkore/scripts/daemon.py --port 5573`: eight rows telling the
+  // operator to start eight daemons that would fight over one port, and not
+  // one of them naming the folder the daemon is actually installed in.
+  // Operator: "es un proceso único en la máquina… una sola pantalla que me
+  // indique en qué carpeta debería estar instalado y el comando para
+  // arrancarlo".
+  //
+  // The folder comes from the last successful connection (`/health.home`,
+  // remembered by lib/daemon-home) — the daemon tells us where it lives
+  // while it is up, so we can say so while it is down.
+  const home = createMemo(() => recallDaemonHome());
+  const [showAgent, setShowAgent] = createSignal(false);
 
   // AX7 (UX-F6) — auto-connect once a daemon appears. `connect()` is
   // one-shot from App.onMount, so before this the operator could start
@@ -128,70 +135,67 @@ function NoDaemon(props: { ports: number[]; onRetry: () => void }) {
   };
   return (
     <div>
-      <h2 class="text-lg font-bold mb-2">No daemon detected</h2>
+      <h2 class="text-lg font-bold mb-2">The daemon is not running</h2>
       <p class="text-gray-400 text-sm leading-relaxed mb-4">
-        We probed <span class="font-mono text-emerald-300">{probedRange()}</span> and got no response.{' '}
-        <Show when={known().length > 0} fallback="Start the daemon in your repo:">
-          Start one of your known projects:
-        </Show>
+        MeshKore runs <span class="text-gray-200">one daemon per machine</span> that serves every project.
+        We probed <span class="font-mono text-emerald-300">{probedRange()}</span> and nothing answered
+        {home() ? ' — most likely the Mac rebooted and it is not resident yet.' : '.'}
       </p>
 
       <Show
-        when={known().length > 0}
+        when={home()}
         fallback={
-          <pre class="bg-gray-950 border border-gray-800 rounded-lg p-3 text-xs font-mono text-emerald-300 mb-4">npx meshcore start</pre>
+          <div class="bg-[rgba(11,18,32,0.6)] border border-gray-700/35 rounded-lg p-3.5 mb-4">
+            <div class="text-[13.5px] font-semibold text-gray-200 mb-1">This browser has never seen a daemon here</div>
+            <p class="text-[12px] text-gray-500 leading-relaxed mb-2.5">
+              Set it up once following{' '}
+              <a class="text-emerald-300 hover:underline" href="https://meshkore.com/architect" target="_blank" rel="noreferrer">meshkore.com/architect</a>
+              , then start it from its folder. As soon as it answers, this page connects on its own and remembers where it lives.
+            </p>
+            <CommandBlock>{'cd <meshkore-server folder> && python3 .meshkore/scripts/daemon.py'}</CommandBlock>
+          </div>
         }
       >
-        <div class="space-y-2.5 mb-4">
-          <For each={known()}>
-            {(p) => <KnownProjectStartRow project={p} />}
-          </For>
-        </div>
+        {(h) => (
+          <div class="bg-[rgba(11,18,32,0.6)] border border-gray-700/35 rounded-lg p-3.5 mb-4">
+            <div class="flex items-center gap-2.5 mb-2.5">
+              <div class="flex-1 min-w-0">
+                <div class="text-[13.5px] font-semibold text-gray-200">Installed at</div>
+                <div class="text-[12px] text-gray-400 font-mono break-all mt-0.5">{h().path}</div>
+                <div class="text-[11px] text-gray-500 mt-1">
+                  last seen {relativeLastSeen(h().seen_at)}
+                  {h().resident ? ' · resident (launchd will bring it back)' : ' · not resident'}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAgent((v) => !v)}
+                class="flex-shrink-0 text-[10px] uppercase tracking-wider px-2 py-1 rounded border border-gray-700 hover:border-emerald-500/50 text-gray-400 hover:text-emerald-200 transition-colors"
+              >
+                {showAgent() ? 'hide prompt' : 'Claude Code'}
+              </button>
+            </div>
+            <CommandBlock>{h().start}</CommandBlock>
+            <Show when={!h().resident}>
+              <p class="text-[11.5px] text-gray-500 leading-relaxed mt-2.5 mb-1">
+                Make it resident so a reboot does not bring you back here:
+              </p>
+              <CommandBlock>{installCommand(h())}</CommandBlock>
+            </Show>
+            <Show when={showAgent()}>
+              <div class="mt-2.5">
+                <CommandBlock multiline label="Paste this into Claude Code / Cursor / Cline">
+                  {agentPromptForHome(h())}
+                </CommandBlock>
+              </div>
+            </Show>
+          </div>
+        )}
       </Show>
 
       <button type="button" onClick={props.onRetry} class="px-3 py-1.5 rounded-md bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-semibold text-xs transition-colors">
         Retry detection
       </button>
-    </div>
-  );
-}
-
-function KnownProjectStartRow(props: { project: KnownProject }) {
-  const [showAgent, setShowAgent] = createSignal(false);
-  const name = (): string =>
-    kp.getAlias(props.project) ||
-    props.project.cluster_name ||
-    props.project.cluster_id ||
-    `:${props.project.port}`;
-  return (
-    <div class="bg-[rgba(11,18,32,0.6)] border border-gray-700/35 rounded-lg p-3.5">
-      <div class="flex items-center gap-2.5 mb-2.5">
-        <div class="flex-1 min-w-0">
-          <div class="text-[13.5px] font-semibold text-gray-200 truncate">{name()}</div>
-          <div class="text-[11px] text-gray-500 mt-0.5">
-            <span class="font-mono text-emerald-300">:{props.project.port}</span>
-            {' · '}last seen {relativeLastSeen(props.project.last_seen)}
-            <Show when={props.project.repo_path}>
-              {(path) => <> · <span class="font-mono break-all">{path()}</span></>}
-            </Show>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowAgent((v) => !v)}
-          class="flex-shrink-0 text-[10px] uppercase tracking-wider px-2 py-1 rounded border border-gray-700 hover:border-emerald-500/50 text-gray-400 hover:text-emerald-200 transition-colors"
-        >
-          {showAgent() ? 'hide prompt' : 'Claude Code'}
-        </button>
-      </div>
-      <CommandBlock>{startCommandLine(props.project)}</CommandBlock>
-      <Show when={showAgent()}>
-        <div class="mt-2.5">
-          <CommandBlock multiline label="Paste this into Claude Code / Cursor / Cline">
-            {agentPrompt(props.project)}
-          </CommandBlock>
-        </div>
-      </Show>
     </div>
   );
 }
