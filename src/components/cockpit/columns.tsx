@@ -209,9 +209,8 @@ function AgentsColumn(props: { selectedModule: string | null }) {
       </div>
       {/* ATM12 follow-up (2026-07-07 operator correction) — the
           fixed-agent explainer moved OUT of this column header and into
-          ChatScopeStrip, as a second line under each fixed agent's own
-          name/model row (only shown while that agent is selected),
-          instead of one combined note always sitting above the rail. */}
+          ChatScopeStrip — since ES-8 the tooltip of the header's title
+          box, shown only for the selected fixed agent. */}
       <div class="chat-body flex-1 flex min-h-0">
         <ChatRail />
         <Splitter resize="chat-rail" title="Drag to resize agent rail" />

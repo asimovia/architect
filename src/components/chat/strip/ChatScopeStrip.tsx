@@ -64,9 +64,9 @@ export default function ChatScopeStrip(props: Props) {
   const clientId = (): string => engine().client;
   const providerId = (): string => engine().provider;
 
-  // ATM12 follow-up (2026-07-07 operator correction) — the fixed-agent
-  // explainer sits under THIS agent's own name row, shown only while that
-  // agent is selected, instead of one combined note above the rail.
+  // ATM12 follow-up (2026-07-07) — the fixed-agent explainer. ES-8
+  // (2026-09-27) moved it from a second header line into the title box's
+  // tooltip: the operator wants the title on screen and the profile on hover.
   //
   // ORC3 (2026-09-22) — it now states the ROLE, not just a warning. The
   // cluster has exactly two system agents and the split between them is
@@ -94,16 +94,19 @@ export default function ChatScopeStrip(props: Props) {
   // onboarding conv is never a draft (it is the always-on master).
   const boundMember = () => teamStore.get(props.meta?.member);
   const memberName = (): string => boundMember()?.name ?? props.meta?.member ?? '';
-  // The title earns its place only when it differs from the member name
-  // (a fresh instance is titled after its member: "Architect Agent" twice).
-  const showTitle = (): boolean =>
-    !props.meta?.member || title().trim().toLowerCase() !== memberName().trim().toLowerCase();
-  const identityTooltip = (): string =>
-    [
-      props.meta?.member ? `Member: ${memberName()} (frozen after the first message)` : null,
-      `Title: ${title()}`,
+  // ES-8 — the box shows the TITLE and nothing else, so it looks the same
+  // on every visit. Who the agent is (member profile, type, system role)
+  // is one hover away. Showing "member › title" only when the two
+  // differed made the header change shape between visits as the title
+  // hydrated — it read as two different headers.
+  const identityTooltip = (): string => {
+    const role = systemRole();
+    return [
+      props.meta?.member ? `Profile: ${memberName()} (frozen after the first message)` : null,
+      role ? `System agent — ${role.name}: ${role.scope}` : null,
       `Type: ${typeInfo().label}${props.meta?.agentId ? ` · ${props.meta.agentId}` : ''}`,
     ].filter(Boolean).join('\n');
+  };
   const isDraft = (): boolean => {
     if (props.conv === ONBOARDING_CONV_ID) return false;
     const msgs = chatStore.state.convMap[props.conv] ?? [];
@@ -148,9 +151,7 @@ export default function ChatScopeStrip(props: Props) {
             />
           }
         >
-          {/* ES-3 — ONE box: who (member) and what (title). The title only
-              appears when it says something the member name does not; the
-              agent type and internal id live in the tooltip. */}
+          {/* ES-3/ES-8 — ONE box with the title; the profile is its tooltip. */}
           <div class="flex-1 min-w-0 flex items-center">
             <Show
               when={props.meta?.member && isDraft()}
@@ -160,15 +161,7 @@ export default function ChatScopeStrip(props: Props) {
                   title={identityTooltip()}
                 >
                   <span aria-hidden="true" class="flex-shrink-0">{boundMember()?.emoji ?? '🤖'}</span>
-                  <Show when={props.meta?.member}>
-                    <span class="font-semibold truncate flex-shrink-0 max-w-[45%]">{memberName()}</span>
-                  </Show>
-                  <Show when={showTitle()}>
-                    <Show when={props.meta?.member}>
-                      <span aria-hidden="true" class="text-gray-500 flex-shrink-0">›</span>
-                    </Show>
-                    <span class={`truncate ${props.meta?.member ? 'text-gray-300' : 'font-semibold'}`}>{title()}</span>
-                  </Show>
+                  <span class="font-semibold truncate">{title()}</span>
                 </span>
               }
             >
@@ -221,28 +214,6 @@ export default function ChatScopeStrip(props: Props) {
           />
         </Show>
       </div>
-      <Show when={systemRole()}>
-        {(role) => (
-          /* One line, under the name row: what this agent is FOR. Coloured
-             off the theme accent (never the rejected orange/red) — same
-             reasoning as AgentCard's pill. */
-          <p class="flex items-center gap-1.5 px-2.5 pb-1.5 mb-1 text-[10px] leading-snug min-w-0">
-            <span
-              class="inline-flex items-center px-1 py-0.5 rounded font-mono text-[9px] uppercase tracking-[0.12em] flex-shrink-0"
-              style={{
-                color: 'var(--theme-accent-bright, #34d399)',
-                border: '1px solid color-mix(in srgb, var(--theme-accent-bright, #34d399) 33%, transparent)',
-              }}
-            >
-              system agent
-            </span>
-            <span class="font-semibold flex-shrink-0" style={{ color: 'var(--theme-accent-bright, #34d399)' }}>
-              {role().name}
-            </span>
-            <span class="text-gray-500 truncate">({role().scope})</span>
-          </p>
-        )}
-      </Show>
     </div>
   );
 }
