@@ -4,7 +4,6 @@ import { log } from '~/lib/log';
 import ChatScopeStrip from '~/components/chat/strip/ChatScopeStrip';
 import ChatHistoryView from '~/components/ChatHistoryView';
 import ChatComposer from '~/components/ChatComposer';
-import RoleMemoryViewer from '~/components/RoleMemoryViewer';
 import ChatThread from '~/components/chat/ChatThread';
 import { AgentRoleHint, EmptyChat } from '~/components/chat/ChatExtras';
 import { isServiceType } from '~/lib/agent-types';
@@ -25,7 +24,6 @@ import RunnerAuthCard from '~/components/RunnerAuthCard';
 export default function ChatPanel() {
   const client = () => daemonStore.state.client;
   const [historyOpen, setHistoryOpen] = createSignal(false);
-  const [memoryOpen, setMemoryOpen] = createSignal(false);
   let threadEl: HTMLDivElement | undefined;
 
   const conv = () => chatStore.state.activeConv;
@@ -184,16 +182,7 @@ export default function ChatPanel() {
           onToggleHistory={() => setHistoryOpen((v) => !v)}
           onRename={rename}
           onArchive={archive}
-          onOpenRoleMemory={() => setMemoryOpen(true)}
         />
-        <Show when={meta()}>
-          <RoleMemoryViewer
-            isOpen={memoryOpen()}
-            onClose={() => setMemoryOpen(false)}
-            type={meta()!.type}
-            rootPath={daemonStore.state.health?.identity ? null : null}
-          />
-        </Show>
         <Show when={!historyOpen()} fallback={
           <ChatHistoryView conv={conv()!} onClose={() => setHistoryOpen(false)} />
         }>

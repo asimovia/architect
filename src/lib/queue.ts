@@ -38,6 +38,7 @@
 import { createRoot, createSignal } from 'solid-js';
 import { daemonStore } from '~/state/daemon';
 import { log } from '~/lib/log';
+import type { DaemonClient } from '~/lib/daemon-client';
 
 const KEY_PREFIX = 'mc-exec-queue::';
 const keyFor = (id: string | null): string => `${KEY_PREFIX}${id ?? 'default'}`;
@@ -85,6 +86,22 @@ export function bindCluster(clusterId: string | null): void {
   setTimeout(() => { void hydrate(); }, 0);
 }
 
+/**
+ * The daemon client of the project this queue is bound to — never the
+ * global "active" client. mf27, 2026-09-27: mid-switch the active client
+ * was still MeshKore's, `hydrate` read MeshKore's queue and stored it as
+ * mf27's, and the new project started life queued on two initiatives it
+ * does not have. Null when that project has no attached instance, or the
+ * client routes to a different project.
+ */
+function clientFor(bound: string | null): DaemonClient | null {
+  if (!bound) return null;
+  const client = daemonStore.state.instances[bound]?.client ?? null;
+  if (!client) return null;
+  const pid = client.transport.projectId;
+  return pid && pid !== bound ? null : client;
+}
+
 function write(next: string[]): void {
   setIds(next);
   persist(cluster(), next);
@@ -97,7 +114,7 @@ function write(next: string[]): void {
  *  the next mutation retries the whole list, and a reload re-reads the
  *  server. Never throws. */
 async function push(next: string[]): Promise<void> {
-  const client = daemonStore.state.client;
+  const client = clientFor(cluster());
   if (!client) return;
   const res = await client.roadmapQueueSet(next);
   if (!res.ok) log.warn('[queue] daemon rejected the queue', { status: res.status });
@@ -107,18 +124,15 @@ async function push(next: string[]): Promise<void> {
  *  local one). Called on every bind; cheap, one anonymous GET. */
 async function hydrate(): Promise<void> {
   const bound = cluster();
-  const client = daemonStore.state.client;
+  const client = clientFor(bound);
   if (!client) return;
   const res = await client.roadmapQueueGet();
   if (!res.ok || cluster() !== bound) return;
   const remote = Array.isArray(res.data?.initiatives) ? res.data.initiatives : [];
-  const local = ids();
-  if (remote.length === 0 && local.length > 0) {
-    // Migration: this browser had a queue from before the server owned it.
-    log.info('[queue] migrating local queue to the daemon', { count: local.length });
-    void push(local);
-    return;
-  }
+  // The daemon's list wins, empty included. The one-off "migrate a local
+  // queue up to the daemon" branch (ORC2) is gone: it re-uploaded whatever
+  // this browser held for the project, and after the mf27 leak that meant
+  // pushing another project's initiatives back every time it was cleaned.
   setIds(remote);
   persist(bound, remote);
 }

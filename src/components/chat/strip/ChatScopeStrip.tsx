@@ -32,8 +32,6 @@ interface Props {
   onToggleHistory: () => void;
   onRename: (next: string) => void;
   onArchive: () => void;
-  /** M7.7 — open the per-type role memory viewer for this agent. */
-  onOpenRoleMemory?: () => void;
 }
 
 export default function ChatScopeStrip(props: Props) {
@@ -197,11 +195,9 @@ export default function ChatScopeStrip(props: Props) {
             conv={props.conv}
             chatActive={!props.historyOpen}
             historyOpen={props.historyOpen}
-            roleLabel={typeInfo().label}
             onGoChat={goChat}
             onRename={() => setEditing(true)}
             onToggleHistory={props.onToggleHistory}
-            onOpenRoleMemory={props.onOpenRoleMemory}
             onArchive={props.onArchive}
           />
         </Show>

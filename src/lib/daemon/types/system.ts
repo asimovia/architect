@@ -40,6 +40,8 @@ export interface HealthResponse {
   cluster_id?: string;
   cluster_name?: string;
   cluster_type?: string;
+  /** RUN-2 (py-1.38.6) — the resolved project's folder on disk. */
+  root?: string;
   device?: { hostname: string; platform: string; arch: string; os_release: string };
   features?: string[];
   /** D-TLS-01 — scheme advertised by daemon (py-1.8.0+). */

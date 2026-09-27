@@ -2,7 +2,7 @@
  * StripActions — the icon row at the right of the chat strip.
  *
  * V104 order: Chat (default-active, the panel's "home") · rename ·
- * History · Role memory · Archive. Archive is single-click (V107.9): a
+ * History · Session (RUN-2 — replaced Role memory) · Archive. Archive is single-click (V107.9): a
  * two-step confirm only flipped a faint border colour, so the operator's
  * second click rarely landed and the button read as broken. Archiving is
  * non-destructive — the conv survives under History's Archived filter.
@@ -14,6 +14,7 @@
 
 import { Show, type JSX } from 'solid-js';
 import { isFixedAgentConv } from '~/state/chat';
+import SessionInfo from './SessionInfo';
 
 const ICON_BTN =
   'inline-flex items-center justify-center w-7 h-7 rounded-md border border-gray-800 '
@@ -52,11 +53,9 @@ export default function StripActions(props: {
   conv: string;
   chatActive: boolean;
   historyOpen: boolean;
-  roleLabel: string;
   onGoChat: () => void;
   onRename: () => void;
   onToggleHistory: () => void;
-  onOpenRoleMemory?: () => void;
   onArchive: () => void;
 }) {
   return (
@@ -77,17 +76,7 @@ export default function StripActions(props: {
           <path d="M12 7v5l4 2" />
         </>
       </IconButton>
-      <Show when={props.onOpenRoleMemory}>
-        <IconButton
-          onClick={() => props.onOpenRoleMemory?.()}
-          title={`Role memory — accumulated REMEMBER facts for the ${props.roleLabel} role`}
-        >
-          <>
-            <path d="M9 3v18M15 3v18M3 9h18M3 15h18" />
-            <rect x="4" y="4" width="16" height="16" rx="2" />
-          </>
-        </IconButton>
-      </Show>
+      <SessionInfo conv={props.conv} />
       <Show when={!isFixedAgentConv(props.conv)}>
         <IconButton onClick={props.onArchive} danger title="Archive conversation">
           <>
