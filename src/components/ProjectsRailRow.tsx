@@ -79,19 +79,30 @@ const DOT_TITLE: Record<RailRowDot, string> = {
   dead: 'Not connected — no live updates',
 };
 
-const DOT_CLASS: Record<RailRowDot, string> = {
-  live: 'bg-emerald-400',
-  reconnecting: 'bg-amber-400 animate-pulse-soft',
-  dead: 'bg-gray-600',
-};
-
-function LivenessDot(props: { state: RailRowDot }) {
+/**
+ * The row's one dot (2026-09-27). Amber means ONE thing: an agent here
+ * finished work the operator has not opened. Connection health only
+ * shows when something is wrong, in gray — a healthy link needs no dot.
+ * The old "live" dot was `bg-emerald-400`, which `theme-accent-remap.css`
+ * repaints with the theme accent: on the yellow theme every connected
+ * project wore an amber dot and "unread" meant nothing.
+ */
+function RowDot(props: { state: RailRowDot; unread: boolean }) {
   return (
-    <span
-      class={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${DOT_CLASS[props.state]}`}
-      title={DOT_TITLE[props.state]}
-      aria-label={DOT_TITLE[props.state]}
-    />
+    <Show
+      when={props.unread}
+      fallback={
+        <Show when={props.state !== 'live'}>
+          <span
+            class={`proj-row-dot proj-row-dot--link ${props.state === 'reconnecting' ? 'is-reconnecting' : ''}`}
+            title={DOT_TITLE[props.state]}
+            aria-label={DOT_TITLE[props.state]}
+          />
+        </Show>
+      }
+    >
+      <span class="proj-row-dot proj-row-dot--unread" title="An agent finished something you have not opened" aria-label="unread finished work" />
+    </Show>
   );
 }
 
@@ -211,7 +222,7 @@ export default function ProjectsRailRow(props: ProjectsRailRowProps) {
                 overflow it, so there the wrap's `is-stopped` accent bar
                 carries the signal on its own. */}
             <Show when={!props.short}>
-              <LivenessDot state={r().dot} />
+              <RowDot state={r().dot} unread={!!r().hasUnread} />
             </Show>
             <span class="proj-row-initials">{r().initials}</span>
           </div>

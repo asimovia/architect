@@ -474,7 +474,20 @@ body.col-reordering .projects-rail-resize {
 /* Driven by `state/chat/unread` (2026-09-27): lit by a turn that ENDED
    while the operator was elsewhere, cleared when that agent is opened.
    Hidden while the louder `is-new` pill is showing. */
-.proj-row-wrap.has-unread:not(.is-new)::after {
+/* Full mode draws the dot inline (RowDot); the corner dot is for short mode. */
+.proj-row-dot {
+  width: 7px; height: 7px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+.proj-row-dot--unread {
+  background: #fbbf24;
+  box-shadow: 0 0 6px rgba(251, 191, 36, 0.65);
+  animation: unread-pulse 1.8s ease-in-out infinite;
+}
+.proj-row-dot--link { background: #4b5563; }
+.proj-row-dot--link.is-reconnecting { background: transparent; border: 1.5px solid #9ca3af; animation: unread-pulse 1.8s ease-in-out infinite; }
+.projects-rail[data-mode="short"] .proj-row-wrap.has-unread:not(.is-new)::after {
   content: '';
   position: absolute;
   top: 8px; right: 8px;

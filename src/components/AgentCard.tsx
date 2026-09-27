@@ -220,7 +220,8 @@ export default function AgentCard(props: AgentCardProps) {
               aria-label="working"
               title="working"
             >
-              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse-soft" />
+              {/* A hollow ring, not a dot: the filled amber dot means "finished, unread". */}
+              <span class="w-2 h-2 rounded-full border-[1.5px] border-emerald-400 animate-pulse-soft" />
             </span>
           </Show>
         </span>
