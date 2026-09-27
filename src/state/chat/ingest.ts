@@ -15,6 +15,7 @@
  *                      when the operator switches back.
  */
 
+import { captureClusterEpoch } from '~/lib/swap-guard';
 import type { DaemonClient, DaemonEvent } from '~/lib/daemon-client';
 import { log } from '~/lib/log';
 import { parseProgress } from '~/lib/turn-progress';
@@ -28,6 +29,7 @@ import {
   clearLastDelta,
   clearTurnProgress,
   setTurnProgress,
+  historyLoadIsCurrent,
 } from './store';
 import { applyChatEvent, applyPatchToList } from './reducer';
 import { getOrCreateSlice, recordActivity } from './cluster-slices';
@@ -135,7 +137,16 @@ export async function loadConvMessagesPage(
   conv: string,
   opts: { before?: string; limit?: number } = {},
 ): Promise<{ has_more: boolean; oldest_ts: string }> {
+  const atCluster = captureClusterEpoch();
+  if (!historyLoadIsCurrent(atCluster, client.transport.projectId)) {
+    log.warn('[swap-guard] history load with another project\'s client — skipped', { conv, client: client.transport.projectId, active: atCluster.key });
+    return { has_more: false, oldest_ts: '' };
+  }
   const res = await client.chatConvMessages(conv, opts);
+  if (!historyLoadIsCurrent(atCluster, client.transport.projectId)) {
+    log.warn('[swap-guard] project switched while loading history — dropped', { conv, from: atCluster.key });
+    return { has_more: false, oldest_ts: '' };
+  }
   if (!res.ok) {
     log.warn('loadConvMessagesPage failed', { conv, status: res.status, body: res.body.slice(0, 200) });
     return { has_more: false, oldest_ts: '' };

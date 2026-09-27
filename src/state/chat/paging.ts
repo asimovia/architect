@@ -10,9 +10,10 @@
  * the same reducer that powers live streaming.
  */
 
+import { captureClusterEpoch } from '~/lib/swap-guard';
 import type { DaemonClient, DaemonEvent } from '~/lib/daemon-client';
 import { log } from '~/lib/log';
-import { state, setState } from './store';
+import { state, setState, historyLoadIsCurrent } from './store';
 import { historyMsg } from './history-msg';
 import { PAGE, UI_MESSAGE_CAP, type ChatMsg } from './types';
 
@@ -73,8 +74,15 @@ export async function loadEarlierMessages(client: DaemonClient, conv: string): P
     setState('paging', conv, 'capped', true);
     return 0;
   }
+  const atCluster = captureClusterEpoch();
+  if (!historyLoadIsCurrent(atCluster, client.transport.projectId)) return 0;
   setState('paging', conv, 'loading', true);
   const res = await client.chatConvMessages(conv, { before: p.oldestTs, limit: PAGE });
+  // Same cross-project guard as the first page (mf27, 2026-09-27).
+  if (!historyLoadIsCurrent(atCluster, client.transport.projectId)) {
+    setState('paging', conv, 'loading', false);
+    return 0;
+  }
   if (!res.ok) {
     setState('paging', conv, 'loading', false);
     log.warn('loadEarlierMessages failed', { conv, status: res.status });

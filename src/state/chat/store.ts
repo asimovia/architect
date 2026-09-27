@@ -6,6 +6,7 @@
  * `chatStore` facade in `index.ts`).
  */
 
+import { isCurrentEpoch, type ClusterEpoch } from '~/lib/swap-guard';
 import type { TurnProgress } from '~/lib/turn-progress';
 import { createStore } from 'solid-js/store';
 import { createSignal } from 'solid-js';
@@ -65,4 +66,20 @@ export function clearTurnProgress(conv: string): void {
     const { [conv]: _drop, ...rest } = xs;
     return rest;
   });
+}
+
+/**
+ * Cross-project guard for history loads (mf27, 2026-09-27). Every project's
+ * master chat is `_onboarding_v1`, so a history page fetched for project A
+ * and written after the operator switched to B lands in B's thread — a
+ * brand-new project opened showing MeshKore's conversation. A load is only
+ * written when the client it used belongs to the project that is active
+ * NOW, and that is still the project active when it was requested.
+ */
+export function historyLoadIsCurrent(token: ClusterEpoch, clientProject: string | undefined): boolean {
+  if (!isCurrentEpoch(token)) return false; // switched (even A → B → A)
+  // The client must belong to the project whose chat slice is bound —
+  // mid-switch, `daemonStore.client` can still be the previous project's.
+  const now = activeClusterId();
+  return !clientProject || !now || clientProject === now;
 }
