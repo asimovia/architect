@@ -25,6 +25,7 @@ import { isValidationRed } from '~/components/architect/ValidationBlock';
 import { debugEmit } from '~/lib/debug-transport';
 import { log } from '~/lib/log';
 import type { ChatQueueItem } from '~/lib/daemon-client';
+import StopButton from '~/components/chat/strip/StopButton';
 
 const ACCEPT = 'image/*,.md,.txt,.pdf,.json,.yaml,.yml,.csv,.log';
 const MAX_IMAGES = 6;
@@ -298,6 +299,13 @@ export default function ChatComposer(props: {
           </button>
         </div>
       </div>
+      {/* ES-9 — STOP where the operator is looking: bottom-right, under the
+          box they type in, while the agent works. */}
+      <Show when={isConvWorking()}>
+        <div class="flex justify-end">
+          <StopButton conv={props.conv} />
+        </div>
+      </Show>
     </div>
   );
 }

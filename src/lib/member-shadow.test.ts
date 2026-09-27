@@ -67,7 +67,7 @@ test('the engine the daemon stamped on save is what shows', () => {
   assert.equal(e.client, 'muse');
 });
 
-test('client always follows the card — there is no per-conv client picker', () => {
+test('an unpinned conv client follows the card', () => {
   const e = resolveDisplayEngine(
     { member: 'architect-master', client: 'claude-code' },
     { client: 'claude-code' },
@@ -155,4 +155,19 @@ test('withLiveOption appends an unlisted live value, and only that', () => {
   ]);
   assert.deepEqual(withLiveOption(opts, 'opus'), opts);
   assert.deepEqual(withLiveOption(opts, ''), opts);
+});
+
+test('ES-2 — a client picked in the header beats the card until un-pinned', () => {
+  const pinned = resolveDisplayEngine(
+    { member: 'architect-master', client: 'codex', enginePinned: true },
+    { client: 'claude-code' },
+    MEMBER,
+  );
+  assert.equal(pinned.client, 'codex');
+  const unpinned = resolveDisplayEngine(
+    { member: 'architect-master', client: 'codex', enginePinned: false },
+    { client: 'claude-code' },
+    MEMBER,
+  );
+  assert.equal(unpinned.client, 'muse');
 });

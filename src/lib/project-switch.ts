@@ -14,7 +14,7 @@
  * daemon's registry first and only scrubs once that lands.
  */
 
-import { createSignal } from 'solid-js';
+import { createEffect, createRoot, createSignal } from 'solid-js';
 import { daemonStore } from '~/state/daemon';
 import { projectsStore } from '~/state/projects';
 import { serverStore } from '~/state/server';
@@ -25,7 +25,7 @@ import { viewStore } from '~/state/view';
 import { storyStore } from '~/state/story';
 import { bindCluster as queueBindCluster } from '~/lib/queue';
 import { railUiStore } from '~/state/rail-ui';
-import { discoverProjects, findClusterPort, liveClusters } from '~/components/projects-rail/discovery';
+import { discoverProjects, findClusterPort, liveClusters, pendingDeletes } from '~/components/projects-rail/discovery';
 import { log } from '~/lib/log';
 import * as kp from '~/lib/known-projects';
 import { clearCachedSnapshot } from '~/lib/snapshot-cache';
@@ -349,11 +349,39 @@ export async function forgetProject(
         return { ok: false, deletedRemotely: false, error: detail };
       }
     } else {
-      log.info('forget: no reachable daemon for this row — local scrub only', { clusterKey });
+      // Warn, not info: this is the case that brought cavioca back. The
+      // tombstone keeps the row hidden and discovery retries the DELETE.
+      log.warn('forget: no reachable daemon for this row — DELETE deferred', { clusterKey });
     }
   }
   return { ok: true, deletedRemotely };
 }
+
+/**
+ * A project the operator deleted that the daemon still lists: the DELETE
+ * never landed (no reachable client at the time, a 5xx, the tab closed
+ * mid-request). Retry it — once per id per session — instead of letting
+ * the row come back. cavioca, 2026-09-27: deleted, reappeared on reload.
+ */
+const retried = new Set<string>();
+createRoot(() => {
+  createEffect(() => {
+    for (const id of pendingDeletes()) {
+      if (retried.has(id)) continue;
+      const client = anyClient();
+      if (!client) continue;
+      retried.add(id);
+      void client.projectDelete(id, AbortSignal.timeout(10_000)).then((res) => {
+        if (res.ok || res.status === 404) {
+          log.info('forget: retried DELETE landed', { id });
+          void discoverProjects();
+        } else {
+          log.warn('forget: retried DELETE refused', { id, status: res.status, error: res.error });
+        }
+      });
+    }
+  });
+});
 
 /** AX17 — the synchronous half of forgetProject: drop every local trace of
  *  the row (instance, cluster stores, known-projects + tombstone, selection)

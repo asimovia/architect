@@ -22,6 +22,11 @@ const ALLOWED_EXACT = new Set<string>([
   'mc-known-projects-v1',
   'mc-daemon-home-v1',   // where this machine's ONE daemon lives (lib/daemon-home)
   'mc-unread-convs-v1',  // agents that finished work not yet read (lib/unread-convs)
+  // known-projects (lib/known-projects). The tombstone key was missing, so
+  // every boot wiped the record of a delete and the project came back.
+  'mc-deleted-projects-v1',
+  'mc-server-home-ids-v1',
+  'mc-last-project-id-v1',
   'mc-project-aliases-v1',
   'mc-projects-order-v1',
   // Theme + layout (per-browser preferences)

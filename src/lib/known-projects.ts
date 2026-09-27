@@ -59,7 +59,13 @@ const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 // operator's DELETE and the daemon's table/discovery catching up re-upserted
 // the ghost row (and its click painted the previous project's stale data).
 const DELETED_KEY = 'mc-deleted-projects-v1';
-const TOMBSTONE_TTL_MS = 5 * 60 * 1000; // 5 min — covers daemon propagation lag
+// 2026-09-27 — was 5 min, which assumed the DELETE always landed. When it
+// did not (no client, a 5xx), the row came back on the next reload: the
+// tombstone had expired AND the boot storage audit wiped it (the key was
+// not allowlisted). It now lives until the daemon stops listing the id
+// (discovery clears it) or the operator re-adds the project; the TTL is a
+// last-resort bound, not the mechanism.
+const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 export interface KnownProject {
   port: number;
@@ -240,9 +246,17 @@ export function isDeleted(clusterId: string): boolean {
   return typeof ts === 'string' && tombstoneFresh(ts);
 }
 
-/** AX17 — the daemon's authoritative /projects table lists this id, so any
- *  tombstone for it is stale (operator re-created it, or the delete never
- *  landed). Clears the tombstone so discovery upserts flow again. */
+/** Clear a delete tombstone: the operator re-added this project, or the
+ *  daemon has confirmed it no longer lists it. NOT called merely because
+ *  the daemon still lists it — that means the delete has not landed yet,
+ *  and `pendingDeletes` retries it (2026-09-27). */
+/** Ids with a live delete tombstone. */
+export function tombstonedIds(): string[] {
+  return Object.entries(readTombstones())
+    .filter(([, ts]) => tombstoneFresh(ts))
+    .map(([id]) => id);
+}
+
 export function revive(clusterId: string): void {
   if (!clusterId) return;
   const map = readTombstones();

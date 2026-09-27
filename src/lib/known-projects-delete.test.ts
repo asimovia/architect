@@ -62,12 +62,15 @@ test('revive clears the tombstone so a re-created project returns', () => {
   assert.deepEqual(ids(), ['zadelar']);
 });
 
-test('an expired tombstone stops vetoing upserts', () => {
+test('a tombstone outlives an hour (cavioca 2026-09-27) and only expires past its 30-day bound', () => {
   installStorage();
   add('zadelar');
   forget({ cluster_id: 'zadelar' });
-  // Backdate the tombstone past its TTL.
+  // An hour later the delete may still not have landed: stay hidden.
   localStorage.setItem(DELETED_KEY, JSON.stringify({ zadelar: new Date(Date.now() - 60 * 60 * 1000).toISOString() }));
+  assert.equal(isDeleted('zadelar'), true);
+  // Past the last-resort bound it stops vetoing.
+  localStorage.setItem(DELETED_KEY, JSON.stringify({ zadelar: new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString() }));
   assert.equal(isDeleted('zadelar'), false);
   add('zadelar');
   assert.deepEqual(ids(), ['zadelar']);

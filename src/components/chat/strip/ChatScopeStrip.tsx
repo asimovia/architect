@@ -4,7 +4,7 @@
  * Left to right: one identity box (member emoji + name › conv title;
  * type and the internal A001-style id in its tooltip — ES-3), the live
  * client/model/effort pickers, the usage chip, the context gauge, a
- * debug-drop badge, STOP while the agent is working, and the action icons.
+ * debug-drop badge and the action icons. STOP lives under the composer (ES-9).
  *
  * AX17 (cockpit-excellence) split the 453-line component: each chip
  * above is its own file under `chat/strip/`. Several were inline
@@ -14,7 +14,6 @@
 
 import { Show, createSignal } from 'solid-js';
 import { chatStore, ONBOARDING_CONV_ID, isFixedAgentConv, type ConvMeta } from '~/state/chat';
-import { isConvWorking } from '~/state/live-selectors';
 import { resolveDisplayEngine } from '~/lib/member-shadow';
 import { teamStore } from '~/state/team';
 import { agentVisualInfo } from '~/lib/agent-types';
@@ -22,7 +21,6 @@ import { debugDropCount } from '~/lib/debug-transport';
 import ContextGauge from './ContextGauge';
 import MemberPicker from './MemberPicker';
 import ModelEffortPickers from './ModelEffortPickers';
-import StopButton from './StopButton';
 import StripActions from './StripActions';
 import TitleEditor from './TitleEditor';
 import UsageChip from './UsageChip';
@@ -192,12 +190,6 @@ export default function ChatScopeStrip(props: Props) {
             >
               ⚠ debug-drops {debugDropCount()}
             </span>
-          </Show>
-          <Show when={isConvWorking(props.conv)}>
-            {/* ES-3 — the "thinking · turn 2m" chip is gone from here: the
-                working bubble shows the same line, and the header has to
-                fit beside the roadmap. */}
-            <StopButton conv={props.conv} />
           </Show>
         </Show>
         <Show when={!editing()}>

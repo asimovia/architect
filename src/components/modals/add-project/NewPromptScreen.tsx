@@ -164,6 +164,11 @@ export default function NewPromptScreen(props: { answers: AddProjectAnswers }) {
       setReg({ kind: 'error', message: msg });
       return;
     }
+    // Re-adding a project the operator deleted earlier: its tombstone would
+    // otherwise keep the new row hidden.
+    if (res.data?.id) {
+      kp.revive(res.data.id);
+    }
     const { id, name, scaffolded } = res.data;
     log.info('add-project: registered', id, 'scaffolded', scaffolded);
     setReg({ kind: 'done', id, name, scaffolded });

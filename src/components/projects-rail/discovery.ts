@@ -24,6 +24,9 @@ export type LiveProbe = {
 export const [livePorts, setLivePorts] = createSignal<Set<number>>(new Set());
 export const [liveClusters, setLiveClusters] = createSignal<Map<string, LiveProbe>>(new Map());
 export const [scanning, setScanning] = createSignal(false);
+/** Ids the operator deleted that the daemon still lists: the DELETE never
+ *  landed. `project-switch` retries it; the rows stay hidden meanwhile. */
+export const [pendingDeletes, setPendingDeletes] = createSignal<string[]>([]);
 
 /**
  * AX7 (UX-F5) — boot-probe reuse.
@@ -150,12 +153,23 @@ export async function discoverProjects(opts: { fullScan?: boolean } = {}): Promi
   // this, downstream memos (rows, orderedRows) recompute once per
   // upsert + once per livePorts/liveClusters change — boot fired the
   // rail-row memo 4-5 times in a row.
+  // A tombstone whose id the daemon no longer lists has done its job.
+  for (const [port, ids] of authoritative) {
+    for (const id of kp.tombstonedIds()) {
+      if (!ids.has(id) && live.some((l) => l.port === port)) kp.revive(id);
+    }
+  }
+  const stillListed: string[] = [];
   batch(() => {
     for (const l of live) {
+      // 2026-09-27 — a deleted id the daemon still lists is a delete that
+      // did not land, not a re-creation: keep it hidden and retry the
+      // DELETE. (It used to revive the tombstone here, so the row came back.)
+      if (l.cluster_id && kp.isDeleted(l.cluster_id)) {
+        if (l.authoritative) stillListed.push(l.cluster_id);
+        continue;
+      }
       if (l.cluster_id) clusterMap.set(l.cluster_id, l);
-      // AX17 — the daemon's authoritative table is source of truth: an id
-      // present here was (re-)created, so drop any delete tombstone first.
-      if (l.authoritative && l.cluster_id) kp.revive(l.cluster_id);
       projectsStore.upsert({
         port: l.port, base: l.base,
         cluster_id: l.cluster_id ?? undefined,
@@ -163,6 +177,7 @@ export async function discoverProjects(opts: { fullScan?: boolean } = {}): Promi
         status: 'live',
       });
     }
+    setPendingDeletes(stillListed);
     setLivePorts(portSet);
     setLiveClusters(clusterMap);
     projectsStore.refresh(); // reflect the pruned cache in the store
