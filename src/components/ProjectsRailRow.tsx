@@ -164,7 +164,7 @@ export default function ProjectsRailRow(props: ProjectsRailRowProps) {
     setForgetting(true);
     try {
       const res = await forgetProject(
-        { cluster_id: r().cluster_id, port: r().port },
+        { cluster_id: r().cluster_id, port: r().port, display: r().display },
         props.onAfterStop,
       );
       if (res.ok) railUiStore.clear();
@@ -319,18 +319,20 @@ export default function ProjectsRailRow(props: ProjectsRailRowProps) {
           </Show>
 
           <Show when={mode() === 'confirm-delete'}>
-            <span
-              class="proj-row-prompt"
-              title="Removes the project from the daemon's registry and from this cockpit (alias, chat metadata, view state, token). Files on disk are NOT touched."
-            >forget?</span>
-            <button type="button" class="proj-row-action is-cancel has-label"
-              onClick={(e) => { e.stopPropagation(); clearForgetError(r().key); railUiStore.clear(); }}>no</button>
-            <button
-              type="button"
-              class="proj-row-action is-danger has-label"
-              title="Unregisters it from the daemon and clears this cockpit's copy. Your files stay where they are."
-              onClick={(e) => { e.stopPropagation(); void confirmDelete(); }}
-            >{forgetting() ? 'forgetting…' : 'forget'}</button>
+            <div class="proj-row-confirm" onClick={(e) => e.stopPropagation()}>
+              <div class="proj-row-confirm__q">Delete from the Architect?</div>
+              <div class="proj-row-confirm__note">Files on disk are not touched.</div>
+              <div class="proj-row-confirm__btns">
+                <button type="button" class="proj-row-action is-cancel has-label"
+                  onClick={(e) => { e.stopPropagation(); clearForgetError(r().key); railUiStore.clear(); }}>no</button>
+                <button
+                  type="button"
+                  class="proj-row-action is-danger has-label"
+                  title="Unregisters it from the daemon and clears this cockpit's copy. Your files stay where they are."
+                  onClick={(e) => { e.stopPropagation(); void confirmDelete(); }}
+                >{forgetting() ? 'deleting…' : 'yes, delete'}</button>
+              </div>
+            </div>
           </Show>
 
           <Show when={mode() === 'confirm-stop-all'}>

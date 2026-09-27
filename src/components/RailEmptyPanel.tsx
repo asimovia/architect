@@ -25,6 +25,7 @@ import { Show, createMemo } from 'solid-js';
 import { rows } from '~/components/projects-rail/rows';
 import { openAddProjectWizard } from '~/components/modals/AddProjectWizard';
 import { discoverProjects, scanning, setScanning } from '~/components/projects-rail/discovery';
+import { lastForgotten } from '~/lib/project-switch';
 
 export default function RailEmptyPanel() {
   const count = createMemo(() => rows().length);
@@ -42,16 +43,30 @@ export default function RailEmptyPanel() {
   return (
     <section class="rail-empty-panel">
       <div class="rail-empty-panel__inner">
+        <Show when={lastForgotten()}>
+          {(n) => (
+            <div class="rail-empty-panel__notice" role="status">
+              <strong>{n().name}</strong> was removed from the Architect.{' '}
+              <span>Its files are still on your disk.</span>
+            </div>
+          )}
+        </Show>
         <Show
           when={count() === 0}
           fallback={
             <>
-              <h2 class="rail-empty-panel__title">Select a project</h2>
+              <h2 class="rail-empty-panel__title">Select a project or add a new one</h2>
               <p class="rail-empty-panel__hint">
-                Pick one from the left column to load its cockpit. Each
-                row carries an edit/delete pair underneath once it's
-                selected.
+                Pick one from the left column to load its cockpit.
               </p>
+              <div class="rail-empty-panel__actions">
+                <button type="button" class="rail-empty-panel__btn is-primary" onClick={openAddProjectWizard}>
+                  <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.4" fill="none" width="14" height="14">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  <span>Add a project</span>
+                </button>
+              </div>
             </>
           }
         >

@@ -332,6 +332,21 @@ body.col-reordering .projects-rail-resize {
 /* Hide the action row entirely in short mode (rail at 56px). */
 .projects-rail[data-mode="short"] .proj-row-actions { display: none; }
 
+/* 2026-09-27 — delete confirm: a readable question over two buttons, not a
+   truncated "FOR…" squeezed between them. */
+.proj-row-confirm { flex-basis: 100%; display: flex; flex-direction: column; gap: 6px; }
+.proj-row-confirm__q {
+  font-size: calc(12px * var(--fs-scale, 1));
+  font-weight: 600;
+  color: #fecaca;
+}
+.proj-row-confirm__note {
+  font-size: calc(10.5px * var(--fs-scale, 1));
+  color: var(--text-muted, #9ca3af);
+  margin-top: -3px;
+}
+.proj-row-confirm__btns { display: flex; gap: 6px; }
+
 /* V82 — inline rename input: render flush with the row, no border. */
 .proj-row-name--editing {
   background: transparent;

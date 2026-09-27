@@ -59,6 +59,8 @@ export async function switchProject(
   key: string,
   fallback?: SwitchFallback,
 ): Promise<boolean> {
+  // Picking a project dismisses the "X was removed" notice.
+  clearLastForgotten();
   if (switchProjectInFlight.has(key)) {
     log.debug('switchProject coalesced — already in flight', { port, key });
     return false;
@@ -249,6 +251,20 @@ export function clearForgetError(key: string): void {
  * ANY client pointed at that daemon works — which matters because a row
  * the operator never opened has no instance of its own.
  */
+/** Any connected client — the machine has ONE daemon, so any of them can
+ *  carry a registry call about another project. */
+function anyClient(): DaemonClient | null {
+  const first = Object.values(daemonStore.state.instances)[0];
+  return first?.client ?? daemonStore.state.client ?? null;
+}
+
+/** The project the operator just removed, for the empty panel's notice.
+ *  Cleared when they pick another project. */
+export interface ForgottenNotice { name: string; at: number }
+const [lastForgotten, setLastForgotten] = createSignal<ForgottenNotice | null>(null);
+export { lastForgotten };
+export function clearLastForgotten(): void { setLastForgotten(null); }
+
 function clientForRow(clusterKey: string, port: number): DaemonClient | null {
   const own = daemonStore.state.instances[clusterKey];
   if (own) return own.client;
@@ -286,7 +302,7 @@ export interface ForgetOutcome {
  * vanishing while the daemon still owns it.
  */
 export async function forgetProject(
-  target: { cluster_id?: string | null; port: number },
+  target: { cluster_id?: string | null; port: number; display?: string },
   onAfter?: () => void,
 ): Promise<ForgetOutcome> {
   const clusterKey = target.cluster_id && target.cluster_id.trim().length > 0
@@ -294,15 +310,25 @@ export async function forgetProject(
     : `port:${target.port}`;
   clearForgetError(clusterKey);
 
+  // 2026-09-27 — resolve the daemon client BEFORE the eviction. The
+  // eviction disconnects this row's instance, and the lookup used to run
+  // after it: with one shared daemon the forgotten project is usually the
+  // ONLY connected instance, so the lookup found nothing, logged "local
+  // scrub only" and never sent the DELETE. The daemon kept the project,
+  // discovery re-listed it a minute later, and the row came back grey —
+  // the operator could not get rid of it. Any instance works as the
+  // carrier: it is one daemon, and DELETE /projects/<id> names its target.
+  const client = target.cluster_id ? clientForRow(clusterKey, target.port) ?? anyClient() : null;
+
   // 1. Optimistic local eviction — synchronous, this tick.
-  log.info('forget — optimistic local eviction', { clusterKey });
+  log.info('forget — optimistic local eviction', { clusterKey, hasClient: !!client });
   evictLocalProject(target, clusterKey);
+  setLastForgotten({ name: target.display || target.cluster_id || `:${target.port}`, at: Date.now() });
   onAfter?.();
 
   // 2. Daemon DELETE in the background.
   let deletedRemotely = false;
   if (target.cluster_id) {
-    const client = clientForRow(clusterKey, target.port);
     if (client) {
       const res = await client.projectDelete(target.cluster_id, AbortSignal.timeout(10_000));
       // 404 = the daemon already doesn't know it; that IS the end state
@@ -316,6 +342,7 @@ export async function forgetProject(
         log.warn('forget: daemon refused DELETE /projects — resurrecting row', { cluster_id: target.cluster_id, status: res.status, detail });
         setForgetErrors((prev) => ({ ...prev, [clusterKey]: detail }));
         // Undo the optimistic eviction: the daemon still owns this project.
+        setLastForgotten(null);
         kp.revive(target.cluster_id);
         projectsStore.refresh();
         void discoverProjects();

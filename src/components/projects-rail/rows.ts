@@ -194,11 +194,17 @@ export const rows = createRoot(() =>
     });
   }
 
+  // 2026-09-27 — a project the operator just forgot never gets a row,
+  // whichever source still lists it (a lagging /projects table, a live
+  // instance, a stale discovery probe). The tombstone is the operator's
+  // decision; every other signal is the system catching up.
+  const visible = result.filter((r) => !(r.cluster_id && kp.isDeleted(r.cluster_id)));
+
   // CN9 — NO re-sort here. `known` already arrives in stable creation
   // order (known-projects.list()); sorting by port (or anything derived
   // from live probes) re-shuffled siblings sharing one FC-2 port on every
   // bind/poll and made the clicked row jump. Creation order is the rail
   // order; operator-saved order (order.ts) applies on top in ProjectsRail.
-  return result;
+  return visible;
   }),
 );
