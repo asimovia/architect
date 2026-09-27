@@ -319,10 +319,10 @@ export default function ProjectsRailRow(props: ProjectsRailRowProps) {
           </Show>
 
           <Show when={mode() === 'confirm-delete'}>
-            <div class="proj-row-confirm" onClick={(e) => e.stopPropagation()}>
-              <div class="proj-row-confirm__q">Delete from the Architect?</div>
-              <div class="proj-row-confirm__note">Files on disk are not touched.</div>
-              <div class="proj-row-confirm__btns">
+            <div class="proj-row-ask" onClick={(e) => e.stopPropagation()}>
+              <div class="proj-row-ask__q">Delete from the Architect?</div>
+              <div class="proj-row-ask__note">Files on disk are not touched.</div>
+              <div class="proj-row-ask__btns">
                 <button type="button" class="proj-row-action is-cancel has-label"
                   onClick={(e) => { e.stopPropagation(); clearForgetError(r().key); railUiStore.clear(); }}>no</button>
                 <button
@@ -330,7 +330,7 @@ export default function ProjectsRailRow(props: ProjectsRailRowProps) {
                   class="proj-row-action is-danger has-label"
                   title="Unregisters it from the daemon and clears this cockpit's copy. Your files stay where they are."
                   onClick={(e) => { e.stopPropagation(); void confirmDelete(); }}
-                >{forgetting() ? 'deleting…' : 'yes, delete'}</button>
+                >{forgetting() ? '…' : 'yes'}</button>
               </div>
             </div>
           </Show>
