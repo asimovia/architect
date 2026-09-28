@@ -13,6 +13,7 @@ import { CollapsibleText } from '~/components/ui/CollapsibleText';
 import BubbleHeader from './BubbleHeader';
 import AttachmentGrid from './AttachmentGrid';
 import { isSystemAuthored } from './agent-identity';
+import { parseWake, wakeLine } from '~/lib/wake-summary';
 
 export function UserBubble(props: { msg: ChatMsg; prepend?: boolean }) {
   // UI strings are English-only. The legacy "architect"/"operator"/"user"
@@ -23,7 +24,19 @@ export function UserBubble(props: { msg: ChatMsg; prepend?: boolean }) {
     return 'USER';
   };
   const sys = (): boolean => isSystemAuthored(props.msg);
+  // BT-7 — a child's "I'm back" turn is written for the parent AGENT
+  // (verdict, report JSON, preview, instructions). The operator gets one
+  // sentence; the raw text stays one click away.
+  const wake = () => (sys() ? parseWake(props.msg.text) : null);
   return (
+    <Show when={!wake()} fallback={
+      <div class="flex flex-col gap-0.5 w-full items-start pl-2" style={{ 'font-size': 'var(--fs-chat)' }}>
+        <details class="max-w-[85%] text-gray-400">
+          <summary class="cursor-pointer list-none text-gray-300">↩ {wakeLine(wake()!)}</summary>
+          <pre class="mt-1 whitespace-pre-wrap text-[11px] text-gray-500 font-mono">{props.msg.text}</pre>
+        </details>
+      </div>
+    }>
     <div class={`flex flex-col gap-1.5 w-full ${sys() ? 'items-start' : 'items-end'}`}>
       <BubbleHeader
         primary={label()}
@@ -44,6 +57,7 @@ export function UserBubble(props: { msg: ChatMsg; prepend?: boolean }) {
         <AttachmentGrid msg={props.msg} align={sys() ? 'left' : 'right'} />
       </Show>
     </div>
+    </Show>
   );
 }
 

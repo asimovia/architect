@@ -140,7 +140,8 @@ export function isAutonomousConv(conv: string | null | undefined): boolean {
  *  not operator speech. Hidden in an autonomous conv — the agent
  *  summarises the outcome itself in its own terse event line. */
 export function isWakeAuthored(msg: ChatMsg): boolean {
-  return msg.author?.trim() === 'architect-wake';
+  const a = msg.author?.trim();
+  return a === 'architect-wake' || a === 'delegate-wake';
 }
 
 log.debug('state/chat loaded');

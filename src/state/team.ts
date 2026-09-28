@@ -135,18 +135,6 @@ function get(id: string | null | undefined): TeamMember | undefined {
   return state.list.find((m) => m.id === id);
 }
 
-/** The generic `developer` member — the default `+` binding (ATM7).
- *  Falls back to the first profile if a cluster renamed it. */
-function developer(): TeamMember | undefined {
-  return get('developer') ?? state.list.find((m) => m.kind === 'profile' && !m.required);
-}
-
-/** Members eligible for the chat-rail picker: hide singletons that
- *  already have a live instance (ATM7). */
-function pickable(): TeamMember[] {
-  return state.list.filter((m) => !(m.kind === 'singleton' && (m.instances ?? 0) > 0));
-}
-
 // ── Mutations ───────────────────────────────────────────────────────
 
 async function create(
@@ -305,8 +293,6 @@ export const teamStore = {
   hydrate,
   detail,
   get,
-  developer,
-  pickable,
   create,
   duplicate,
   update,

@@ -19,7 +19,6 @@ import { teamStore } from '~/state/team';
 import { agentVisualInfo } from '~/lib/agent-types';
 import { debugDropCount } from '~/lib/debug-transport';
 import ContextGauge from './ContextGauge';
-import MemberPicker from './MemberPicker';
 import ModelEffortPickers from './ModelEffortPickers';
 import StripActions from './StripActions';
 import TitleEditor from './TitleEditor';
@@ -103,27 +102,6 @@ export default function ChatScopeStrip(props: Props) {
       `Type: ${typeInfo().label}${props.meta?.agentId ? ` · ${props.meta.agentId}` : ''}`,
     ].filter(Boolean).join('\n');
   };
-  const isDraft = (): boolean => {
-    if (props.conv === ONBOARDING_CONV_ID) return false;
-    const msgs = chatStore.state.convMap[props.conv] ?? [];
-    return !msgs.some((m) => m.kind === 'user' || m.kind === 'assistant');
-  };
-  // Rebinding a draft carries the new member's FULL engine: client and
-  // provider travel with model/effort, so the header's client badge and
-  // model catalog flip to the new member in the same paint.
-  const rebindMember = (id: string): void => {
-    const m = teamStore.get(id);
-    chatStore.setConvMember(props.conv, id, {
-      client: m?.client,
-      provider: m?.provider,
-      model: m?.model,
-      effort: m?.effort,
-      // Only rename when the title still matches the previous member's
-      // name — never clobber one the operator typed.
-      title: props.meta?.title === boundMember()?.name ? m?.name : undefined,
-    });
-  };
-
   const commitRename = (next: string): void => {
     setEditing(false);
     if (next !== (props.meta?.title ?? '')) props.onRename(next);
@@ -149,21 +127,13 @@ export default function ChatScopeStrip(props: Props) {
         >
           {/* ES-3/ES-8 — ONE box with the title; the profile is its tooltip. */}
           <div class="flex-1 min-w-0 flex items-center">
-            <Show
-              when={props.meta?.member && isDraft()}
-              fallback={
-                <span
-                  class="inline-flex items-center gap-1.5 min-w-0 max-w-full px-2 py-0.5 rounded text-[12px] text-gray-100 bg-gray-800/60 border border-gray-700/60"
-                  title={identityTooltip()}
-                >
-                  <span aria-hidden="true" class="flex-shrink-0">{boundMember()?.emoji ?? '🤖'}</span>
-                  <span class="font-semibold truncate">{title()}</span>
-                </span>
-              }
+            <span
+              class="inline-flex items-center gap-1.5 min-w-0 max-w-full px-2 py-0.5 rounded text-[12px] text-gray-100 bg-gray-800/60 border border-gray-700/60"
+              title={identityTooltip()}
             >
-              <MemberPicker current={props.meta!.member!} onPick={rebindMember} />
-              <span class="ml-2 text-sm font-semibold text-gray-100 truncate">{title()}</span>
-            </Show>
+              <span aria-hidden="true" class="flex-shrink-0">{boundMember()?.emoji ?? '🤖'}</span>
+              <span class="font-semibold truncate">{title()}</span>
+            </span>
           </div>
           <ModelEffortPickers
             conv={props.conv}

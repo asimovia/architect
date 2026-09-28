@@ -44,10 +44,63 @@ export function stripRememberLines(text: string): string {
  * carry them.
  */
 export function stripAnchorMarkers(text: string): string {
-  if (!text || !text.includes('⟦anchor')) return text;
-  return text
-    .replace(/^[\s\n]*⟦anchor⟧\s*\{[^\n]*\}[ \t]*\n?/, '')
-    .replace(/⟦anchor-progress⟧\s*\{[^\n]*\}[ \t]*\n?/g, '');
+  if (!text || !text.includes('⟦')) return text;
+  let out = text;
+  for (const name of ['report', 'anchor-progress', 'anchor']) out = sweepMarker(out, name);
+  return out.replace(/^[ \t]*⟦become⟧[ \t]*`?[a-z][a-z0-9-]{1,31}`?[ \t]*\n?/gm, '');
+}
+
+/**
+ * BT-4 — remove every `⟦<name>⟧ {json}`, wherever it sits on its line. The
+ * payload ends at its own closing brace (balanced, string-aware), not at the
+ * LAST `}` of the line: `⟦report⟧ {..}⟦anchor⟧ {..} prose` (mf27) matched
+ * nothing under the old pattern and showed up whole. A reported payload's
+ * bare echo on its own line goes too.
+ */
+function sweepMarker(text: string, name: string): string {
+  const tag = `⟦${name}⟧`;
+  let out = '';
+  let pos = 0;
+  const echoes: string[] = [];
+  for (;;) {
+    const at = text.indexOf(tag, pos);
+    if (at < 0) break;
+    let i = at + tag.length;
+    while (text[i] === ' ' || text[i] === '\t') i += 1;
+    if (text[i] !== '{') { out += text.slice(pos, i); pos = i; continue; }
+    const end = jsonEnd(text, i);
+    let stop = end < 0 ? (text.indexOf('\n', i) < 0 ? text.length : text.indexOf('\n', i)) : end;
+    if (end >= 0 && name === 'report') echoes.push(text.slice(i, end));
+    out += text.slice(pos, at);
+    while (text[stop] === ' ' || text[stop] === '\t') stop += 1;
+    if (text[stop] === '\n' && (out === '' || out.endsWith('\n'))) stop += 1;
+    pos = stop;
+  }
+  out += text.slice(pos);
+  if (!echoes.length) return out;
+  const same = (a: string, b: string): boolean => {
+    try { return JSON.stringify(JSON.parse(a)) === JSON.stringify(JSON.parse(b)); } catch { return false; }
+  };
+  return out.split('\n').filter((ln) => !echoes.some((e) => same(ln.trim(), e))).join('\n');
+}
+
+/** Index just past the JSON object starting at `i`, or -1 if it never closes. */
+function jsonEnd(text: string, i: number): number {
+  let depth = 0;
+  let inStr = false;
+  for (let j = i; j < text.length; j += 1) {
+    const ch = text[j];
+    if (inStr) {
+      if (ch === '\\') j += 1;
+      else if (ch === '"') inStr = false;
+    } else if (ch === '"') inStr = true;
+    else if (ch === '{') depth += 1;
+    else if (ch === '}') {
+      depth -= 1;
+      if (depth === 0) return j + 1;
+    } else if (ch === '\n') return -1;
+  }
+  return -1;
 }
 
 /** Both scrubbers in the order the ingest path applies them. */

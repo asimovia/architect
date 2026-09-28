@@ -9,7 +9,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { keepAttachments, type ChatAttachment } from './chat-sanitize.ts';
+import { keepAttachments, stripAnchorMarkers, type ChatAttachment } from './chat-sanitize.ts';
 
 const optimistic: ChatAttachment[] = [
   { kind: 'image', media_type: 'image/png', url: 'data:image/png;base64,AAA' },
@@ -33,4 +33,20 @@ test('echo with attachments replaces the optimistic ones', () => {
 
 test('no attachments anywhere stays empty', () => {
   assert.equal(keepAttachments(undefined, undefined), undefined);
+});
+
+test('BT-4 — report + anchor on one line, and the bare echo, never reach the chat (mf27)', () => {
+  const text = [
+    '#VW2 done — commit 52a9521.',
+    '{"for":["rq-7d930b"],"status":"done","commit":"52a9521"}',
+    '',
+    '⟦report⟧ {"for":["rq-7d930b"],"status":"done","commit":"52a9521"}⟦anchor⟧ {"info":true} Nada pendiente',
+  ].join('\n');
+  const out = stripAnchorMarkers(text);
+  assert.ok(!out.includes('⟦') && !out.includes('{'), out);
+  assert.ok(out.startsWith('#VW2 done') && out.endsWith('Nada pendiente'), out);
+});
+
+test('BT-4 — a brace inside a string does not end the payload', () => {
+  assert.equal(stripAnchorMarkers('ok\n⟦report⟧ {"next":"fix } later"}'), 'ok\n');
 });

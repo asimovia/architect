@@ -37,13 +37,13 @@ export function convAgentName(conv: string | null | undefined, msg?: ChatMsg): s
 
 /**
  * py-1.11.0-cockpit — authors the DAEMON uses when it synthesises a
- * `chat.user` event (today: `architect-wake`, which posts a subagent's
+ * `chat.user` event (`architect-wake` / `delegate-wake`, which post a child's
  * result preview into the parent architect's conv). This is agent↔agent
  * traffic surfaced for information; rendering it on the operator's side
  * read as "the operator said this", a lie. Such messages are mirrored to
  * the agent side while keeping the verbatim author label.
  */
-const SYSTEM_USER_AUTHORS = new Set<string>(['architect-wake']);
+const SYSTEM_USER_AUTHORS = new Set<string>(['architect-wake', 'delegate-wake']);
 
 export function isSystemAuthored(msg: ChatMsg): boolean {
   const a = msg.author?.trim();

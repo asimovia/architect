@@ -4,6 +4,8 @@ import AgentCard from '~/components/AgentCard';
 import { agentVisualColor } from '~/lib/agent-types';
 import { uiStore } from '~/state/ui';
 import { loadRailOrder, saveRailOrder } from './chat/rail-order';
+import { railTree } from '~/lib/rail-tree';
+import { teamPicker } from '~/state/team-picker';
 
 // 2026-06-10 — three responsive layouts (operator request:
 // "3 responsive widths con 3 formatos distintos"):
@@ -128,6 +130,16 @@ export default function ChatRail() {
     return [...head, ...opOrder, ...newcomers];
   });
 
+  // BT-6 — teammates working for another agent hang under it, and leave
+  // the rail when they are done (their trace is the wake turn in the
+  // parent's thread). The order above still decides the top level.
+  const rows = createMemo(() =>
+    railTree(orderedConvs(), chatStore.state.convs, {
+      root: ONBOARDING_CONV_ID,
+      active: chatStore.state.activeConv,
+    }),
+  );
+
   const statusOf = (conv: string) => {
     // py-1.11.0 — chat-state-rearchitecture. Single source of truth:
     // the daemon's `live` OR `coordinating` flag on the conv summary.
@@ -173,10 +185,11 @@ export default function ChatRail() {
       {/* 2026-06-19 — the rail header (Agents + "+") moved up into the
           chat column's top bar (ChatColumn). The rail is just the list. */}
       <div class="flex-1 min-h-0 overflow-y-auto chat-rail-pinned chat-rail-list">
-        <For each={orderedConvs()}>
-          {(c) => {
+        <For each={rows()}>
+          {(row) => {
+            const c = row.conv;
             const meta = () => chatStore.ensureConvMeta(c);
-            return (
+            const card = () => (
               <AgentCard
                 conv={c}
                 meta={meta()}
@@ -188,7 +201,7 @@ export default function ChatRail() {
                 compact={compact()}
                 medium={medium()}
                 railWidth={uiStore.state.chatRailWidth}
-                onSelect={chatStore.setActiveConv}
+                onSelect={(id) => { teamPicker.close(); chatStore.setActiveConv(id); }}
                 onDragStart={(id) => setDragSrc(id)}
                 onDragEnd={() => { setDragSrc(null); setDragTgt(null); }}
                 onDragOver={(id) => setDragTgt(id)}
@@ -197,6 +210,14 @@ export default function ChatRail() {
                 dragOver={dragTgt() === c && dragSrc() !== null && dragSrc() !== c}
                 dragging={dragSrc() === c}
               />
+            );
+            return (
+              <Show when={row.depth > 0} fallback={card()}>
+                {/* dynamic: nesting depth drives the indent + connector. */}
+                <div class="rail-child" style={{ '--rail-depth': String(row.depth) }}>
+                  {card()}
+                </div>
+              </Show>
             );
           }}
         </For>

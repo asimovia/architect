@@ -5,8 +5,9 @@ import ChatScopeStrip from '~/components/chat/strip/ChatScopeStrip';
 import ChatHistoryView from '~/components/ChatHistoryView';
 import ChatComposer from '~/components/ChatComposer';
 import ChatThread from '~/components/chat/ChatThread';
-import { AgentRoleHint, EmptyChat } from '~/components/chat/ChatExtras';
-import { isServiceType } from '~/lib/agent-types';
+import { EmptyChat } from '~/components/chat/ChatExtras';
+import TeamPicker from '~/components/chat/TeamPicker';
+import { teamPicker } from '~/state/team-picker';
 import { daemonStore } from '~/state/daemon';
 import { openTokenUnlockModal } from '~/components/modals/TokenUnlockModal';
 // V97 — `openDaemonOutdatedModal` removed (no more floating modal).
@@ -174,6 +175,7 @@ export default function ChatPanel() {
 
   return (
     <div class="flex flex-col h-full min-h-0 bg-gray-950/30 border border-gray-800/60 rounded-lg overflow-hidden">
+      <Show when={!teamPicker.isOpen()} fallback={<TeamPicker />}>
       <Show when={conv()} fallback={<EmptyChat />}>
         <ChatScopeStrip
           conv={conv()!}
@@ -214,9 +216,7 @@ export default function ChatPanel() {
               state is now caught by Cockpit before ChatPanel renders */
           onTokenRejected={onTokenRejected}
         />
-        <Show when={isServiceType(meta()?.type) && msgs().length === 0}>
-          <AgentRoleHint type={meta()!.type} />
-        </Show>
+      </Show>
       </Show>
     </div>
   );

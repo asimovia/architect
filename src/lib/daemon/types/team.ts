@@ -120,6 +120,9 @@ export interface TeamMember {
   updated?: string;
   /** TEG-3 — internal (default) or external (token-reachable). */
   exposure?: TeamMemberExposure;
+  /** BT-5 — the card's opening sentence (derived by the daemon from the
+   *  prompt; py-1.39.0+). Absent on older daemons. */
+  summary?: string;
   /** Non-archived live convs currently bound to this member (from GET /team). */
   instances?: number;
 }

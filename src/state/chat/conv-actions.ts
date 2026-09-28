@@ -178,8 +178,8 @@ export function setConvEffort(conv: string, effort: string): void {
   saveConvMeta();
 }
 
-/** agent-team (ATM7) — rebind a DRAFT conv (no messages yet) to another
- *  roster member, refreshing the full engine (client/provider/model/effort)
+/** agent-team (ATM7) — bind a conv to a roster member (BT-5: the team
+ *  picker, right after creating it), setting the full engine (client/provider/model/effort)
  *  and the title when it still matches the previous member's name. The
  *  whole engine travels: rebinding to a Codex member must flip the header's
  *  client badge and model catalog too, not just model/effort. */

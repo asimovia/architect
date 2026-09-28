@@ -2996,3 +2996,26 @@
   z-index: 1;
 }
 .chat-rail-stack.compact .agent-unread-dot { top: 3px; right: 3px; width: 6px; height: 6px; }
+
+/* BT-6 (base-team) — a teammate working for the agent above it: 20 px in
+   per level, with an elbow from the parent's edge. No separator line: it
+   belongs to the row above. */
+.rail-child {
+  position: relative;
+  padding-left: calc(var(--rail-depth, 1) * 20px);
+}
+.chat-rail-list > .rail-child::before { display: none; }
+.rail-child::after {
+  content: '';
+  position: absolute;
+  left: calc(var(--rail-depth, 1) * 20px - 12px);
+  top: -5px;
+  width: 9px;
+  height: calc(50% + 5px);
+  border-left: 1px solid rgba(148, 163, 184, 0.45);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.45);
+  border-bottom-left-radius: 4px;
+  pointer-events: none;
+}
+.chat-rail-stack.compact .rail-child { padding-left: calc(var(--rail-depth, 1) * 6px); }
+.chat-rail-stack.compact .rail-child::after { display: none; }
