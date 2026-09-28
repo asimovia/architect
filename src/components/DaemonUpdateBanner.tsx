@@ -146,6 +146,10 @@ export default function DaemonUpdateBanner(): JSX.Element {
         ⟳ {current()} → {EXPECTED_DAEMON_VERSION}
       </span>
       <span class="flex-1 min-w-0 truncate">{text()}</span>
+      {/* The manual route is a fallback, not a step: offer it only when the
+          automatic path cannot finish on its own (operator, 2026-09-28:
+          "todos los procesos deberían ser automáticos"). */}
+      <Show when={phase() === 'failed' || phase() === 'disabled'}>
       <button
         type="button"
         onClick={() => setShowManual((v) => !v)}
@@ -153,7 +157,8 @@ export default function DaemonUpdateBanner(): JSX.Element {
       >
         {showManual() ? 'hide' : 'manual'}
       </button>
-      <Show when={showManual()}>
+      </Show>
+      <Show when={showManual() && (phase() === 'failed' || phase() === 'disabled')}>
         <div class="w-full flex items-center gap-2 text-[11px] text-gray-300">
           <span class="text-gray-400">In the folder that holds the machine's shared daemon:</span>
           <code class="font-mono text-amber-200 select-all">{SHARED_DAEMON_RESTART_CMD}</code>

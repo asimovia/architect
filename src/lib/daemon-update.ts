@@ -38,8 +38,8 @@ export function pendingLine(names: readonly string[]): string {
   const who = busyWho(names);
   const verb = names.length > 1 && who !== 'the running turn' ? 'finish their turns' : 'finishes its turn';
   return who === 'the running turn'
-    ? 'Daemon update pending — it applies when the running turn finishes'
-    : `Daemon update pending — it applies when ${who} ${verb}`;
+    ? 'Daemon update pending — it applies automatically when the running turn finishes'
+    : `Daemon update pending — it applies automatically when ${who} ${verb}`;
 }
 
 export type UpdatePhase = 'idle' | 'updating' | 'pending' | 'failed' | 'disabled';

@@ -9,10 +9,10 @@ test('a 409 is "busy", not "cannot update"', () => {
 });
 
 test('the pending line names who it waits for', () => {
-  assert.equal(pendingLine(['the Architect']), 'Daemon update pending — it applies when the Architect finishes its turn');
+  assert.equal(pendingLine(['the Architect']), 'Daemon update pending — it applies automatically when the Architect finishes its turn');
   assert.equal(busyWho(['the Architect', 'developer']), 'the Architect and developer');
   assert.equal(busyWho(['a', 'b', 'c']), '3 agents');
-  assert.equal(pendingLine([]), 'Daemon update pending — it applies when the running turn finishes');
+  assert.equal(pendingLine([]), 'Daemon update pending — it applies automatically when the running turn finishes');
 });
 
 test('retries the moment the daemon goes idle, and on a timer otherwise', () => {
