@@ -12,6 +12,9 @@
 
 import type { ChatMsg } from '../state/chat/types';
 import type { DaemonEvent } from '~/lib/daemon-client';
+// Relative + .ts so `node --test` can load this leaf.
+import { parseWake } from './wake-summary.ts';
+import { isFinished } from './delegation.ts';
 
 export type StreamItem =
   | { kind: 'msg'; ts: string; msg: ChatMsg; prepend?: boolean }
@@ -118,6 +121,39 @@ export function groupAutonomous(pre: StreamItem[], live: ChatMsg | null): AutoSe
   return out;
 }
 
+/**
+ * BT-17 — wake turns whose outcome a FINISHED delegation card already
+ * shows. The card is the single place the outcome appears; the
+ * "↩ developer finished …" sentence stays only where no card covers it
+ * (older daemons emit no `delegate.*`). A wake is covered by the latest
+ * card for its child conv that started at or before it — so a later,
+ * still-working delegation to the same member never hides an earlier
+ * wake it has nothing to do with, and vice versa.
+ */
+export function wakesCoveredByCards(
+  msgs: readonly ChatMsg[],
+  isWake: (m: ChatMsg) => boolean,
+): Set<ChatMsg> {
+  const hidden = new Set<ChatMsg>();
+  const cards = msgs.filter((m) => m.delegation?.child_conv);
+  if (cards.length === 0) return hidden;
+  for (const m of msgs) {
+    if (m.kind !== 'user' || !isWake(m)) continue;
+    const w = parseWake(m.text);
+    if (!w?.conv) continue;
+    const wts = m.ts ?? '';
+    let best: ChatMsg | null = null;
+    for (const c of cards) {
+      if (c.delegation!.child_conv !== w.conv) continue;
+      const cts = c.delegation!.ts ?? c.ts ?? '';
+      if (wts && cts && cts > wts) continue;
+      if (!best || (best.delegation!.ts ?? '') <= cts) best = c;
+    }
+    if (best && isFinished(best.delegation!)) hidden.add(m);
+  }
+  return hidden;
+}
+
 export function buildStream(
   conv: string,
   msgs: ChatMsg[],
@@ -143,8 +179,10 @@ export function buildStream(
   // ALREADY-ANSWERED message kept the "queued" badge and rendered BELOW its
   // own response (operator field 2026-06-17). No live bubble ⇒ nothing is
   // queued; trailing messages just flow in sequence and trigger the next turn.
+  const covered = wakesCoveredByCards(msgs, isWake);
   msgs.forEach((m, i) => {
     if (i === liveIdx) return;
+    if (covered.has(m)) return;
     // Autonomous convs: hide the daemon→agent wake plumbing entirely
     // (the agent summarises the outcome in its own terse event line).
     if (autonomous && isWake(m)) return;

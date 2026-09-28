@@ -120,6 +120,9 @@ function onAnchored(conv: string, ev: DaemonEvent): void {
     initiative_id: str(ev.initiative_id) ?? prev?.initiative_id ?? null,
     task_id: str(ev.task_id) ?? prev?.task_id ?? null,
     last_activity_at: str(ev.ts) ?? prev?.last_activity_at ?? '',
+    // BT-17 — between-turns action (waiting on a delegate). A key the
+    // daemon did not send leaves the last value; `null` clears it.
+    current_action: 'current_action' in ev ? ev.current_action ?? null : prev?.current_action ?? null,
   }));
   // LAL9 — a fresh anchor clears the missing-anchor flag (guardrail reset).
   if (state.anchorMissing[conv] !== undefined) {

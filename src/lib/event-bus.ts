@@ -10,6 +10,7 @@
  *
  * Routing:
  *   chat.user / chat.assistant.* / chat.cancelled  → chatStore.ingestEvent
+ *   delegate.* (BT-17 delegation cards)            → chatStore.ingestEvent
  *   state.rebuilt / task.* / initiative.* /
  *   module.* / docs.* / links.updated /
  *   protocols.updated                              → serverStore.refresh
@@ -32,6 +33,7 @@ import { daemonStore } from '~/state/daemon';
 import { viewStore } from '~/state/view';
 import { bumpContextRev } from '~/state/context-sync';
 import { log } from './log';
+import { DELEGATE_EVENT_PREFIX } from './delegation';
 
 const SNAPSHOT_REFRESH_TYPES = new Set<string>([
   'state.rebuilt',
@@ -153,6 +155,13 @@ export function attachEventBus(
       // is active, this is a normal ingestEvent (reactive setState);
       // when inactive, it mutates the cached slice so the operator
       // sees the messages on switch back.
+      chatStore.ingestEventForCluster(clusterKey, ev);
+      return;
+    }
+    if (t.startsWith(DELEGATE_EVENT_PREFIX) && typeof ev.conv === 'string') {
+      // BT-17 — a delegation card in the PARENT's thread (`ev.conv` is the
+      // parent). Same path as chat.* so a background project's cards are
+      // waiting in its slice on switch-back.
       chatStore.ingestEventForCluster(clusterKey, ev);
       return;
     }

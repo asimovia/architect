@@ -9,6 +9,7 @@ import type { TurnProgress } from '~/lib/turn-progress';
 
 import type { ChatConvSummary, ChatQueueItem } from '~/lib/daemon-client';
 import type { ChatAttachment } from '~/lib/chat-sanitize';
+import type { DelegationCard } from '~/lib/delegation';
 
 export type { ChatAttachment };
 
@@ -75,7 +76,10 @@ export interface ChatMsg {
   stream_id?: string;
   cancelled?: boolean;
   /** Severity styling for client-side 'system' messages. */
-  system_kind?: 'error' | 'warning' | 'info' | 'divider';
+  system_kind?: 'error' | 'warning' | 'info' | 'divider' | 'delegation';
+  /** BT-17 — for `system_kind: 'delegation'`: the card built from the
+   *  `delegate.*` events of one request_id, updated in place. */
+  delegation?: DelegationCard;
   /** REL1 — for a `system`/error bubble born from a failed dispatch: the
    *  text that never made it, so the thread can offer "resend" instead of
    *  making the operator retype it. */

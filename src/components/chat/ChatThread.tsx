@@ -4,6 +4,7 @@ import { daemonStore } from '~/state/daemon';
 import { MessageBubble, PreparingBubble, ToolUseBubble, TaskLifecycleBubble, AutonomousRun } from '~/components/chat/bubbles';
 import { waitingByConv } from '~/state/server';
 import { groupAutonomous, type StreamItem } from '~/lib/chat-stream';
+import { idleActionLabel } from '~/lib/turn-progress';
 
 // V89.1 — Hard timeout for the preparing bubble. If no delta / final
 // / cancelled arrives within this window after a dispatch, the flag
@@ -242,11 +243,32 @@ export default function ChatThread(props: {
       <Show when={preparingAt()}>
         {(ts) => <PreparingBubble conv={props.conv} dispatchedAt={ts()} />}
       </Show>
-      <Show when={waitingChildren().length > 0 && !preparingAt() && !props.stream.live}>
-        <WaitingOnPill children_={waitingChildren()} />
+      <Show
+        when={!preparingAt() && !props.stream.live && idleAction()}
+        fallback={
+          <Show when={waitingChildren().length > 0 && !preparingAt() && !props.stream.live}>
+            <WaitingOnPill children_={waitingChildren()} />
+          </Show>
+        }
+      >
+        {(a) => <IdleActionLine label={a().label} childConv={a().childConv} />}
       </Show>
     </div>
   );
+
+  // BT-17 — an idle conv that is still doing something between turns
+  // (waiting on a delegated brief): say so in words instead of nothing.
+  function idleAction(): { label: string; childConv: string | null } | null {
+    const conv = chatStore.state.activeConv;
+    if (!conv) return null;
+    const summary = chatStore.state.convs[conv];
+    if (!summary || summary.live) return null;
+    const raw = summary.current_action;
+    const label = idleActionLabel(raw, nowMs());
+    if (!label) return null;
+    const child = raw && typeof raw === 'object' ? (raw as { child_conv?: unknown }).child_conv : null;
+    return { label, childConv: typeof child === 'string' && child ? child : null };
+  }
 
   // py-1.11.0 — Resolve the list of child convs this conv is waiting
   // on (subagents whose `parent_conv` points here and are streaming
@@ -292,6 +314,31 @@ function ChatLoadingPlaceholder() {
         <div class="h-4 w-8/12 rounded bg-gray-800/40 animate-pulse-soft [animation-delay:400ms]" />
         <div class="h-4 w-11/12 rounded bg-gray-800/40 animate-pulse-soft [animation-delay:480ms]" />
       </div>
+    </div>
+  );
+}
+
+/** BT-17 — "waiting on developer · SEL1 · 4m00s" under an idle parent.
+ *  Clicking opens the child it waits on, when the daemon named it. */
+function IdleActionLine(props: { label: string; childConv: string | null }) {
+  return (
+    <div class="flex items-center gap-2 text-[12px] pl-2 pt-1 min-w-0">
+      <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse-soft flex-shrink-0" />
+      <Show
+        when={props.childConv}
+        fallback={<span class="font-mono text-[11px] text-emerald-300/80 truncate">{props.label}</span>}
+      >
+        {(child) => (
+          <button
+            type="button"
+            onClick={() => chatStore.setActiveConv(child())}
+            title={`Open ${child()}`}
+            class="font-mono text-[11px] text-emerald-300/80 hover:text-emerald-200 truncate text-left"
+          >
+            {props.label}
+          </button>
+        )}
+      </Show>
     </div>
   );
 }

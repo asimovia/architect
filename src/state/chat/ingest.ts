@@ -19,6 +19,7 @@ import { captureClusterEpoch } from '~/lib/swap-guard';
 import type { DaemonClient, DaemonEvent } from '~/lib/daemon-client';
 import { log } from '~/lib/log';
 import { parseProgress } from '~/lib/turn-progress';
+import { isDelegationEvent } from '~/lib/delegation';
 import {
   state,
   setState,
@@ -171,9 +172,12 @@ export async function loadConvMessagesPage(
       // one the operator reads: a turn that died has to explain itself
       // when the thread is reopened, not only while the tab was watching.
       // (`paging.historyMsg` covers the older pages.)
+      // BT-17 — `delegate.*` rebuild the delegation cards through the same
+      // reducer, so a reopened thread shows them exactly as live.
       if (
         t !== 'chat.user' && t !== 'chat.assistant' && t !== 'chat.assistant.final'
         && t !== 'chat.cancelled' && t !== 'chat.error' && t !== 'chat.notice'
+        && !isDelegationEvent(t)
       ) {
         continue;
       }

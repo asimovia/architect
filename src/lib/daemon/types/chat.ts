@@ -132,6 +132,11 @@ export interface ChatConvSummary {
   created_at: string;
   last_activity_at: string;
   msg_count: number;
+  /** BT-17 — what an IDLE conv is doing between turns, e.g.
+   *  `{tool:"waiting", target:"developer · SEL1", since, child_conv,
+   *  request_id}` while it waits on a delegated brief. Null/absent when
+   *  there is nothing. (During a turn it rides `current_turn` instead.) */
+  current_action?: unknown;
   /** CU1 (daemon py-1.13.3) — cumulative token usage + cost for this
    *  conv. Absent until the first turn finalises. Resets on daemon
    *  restart. */

@@ -15,6 +15,8 @@ import type { DaemonClient, DaemonEvent } from '~/lib/daemon-client';
 import { log } from '~/lib/log';
 import { state, setState, historyLoadIsCurrent } from './store';
 import { historyMsg } from './history-msg';
+import { applyChatEvent, applyPatchToList, mergeDelegationCards } from './reducer';
+import { isDelegationEvent } from '~/lib/delegation';
 import { PAGE, UI_MESSAGE_CAP, type ChatMsg } from './types';
 
 function listLen(conv: string): number {
@@ -88,12 +90,19 @@ export async function loadEarlierMessages(client: DaemonClient, conv: string): P
     log.warn('loadEarlierMessages failed', { conv, status: res.status });
     return 0;
   }
-  const older: ChatMsg[] = [];
+  let older: ChatMsg[] = [];
   for (const ev of res.data.messages) {
-    const m = historyMsg(ev as DaemonEvent);
+    const e = ev as DaemonEvent;
+    // BT-17 — delegation events fold into cards (one per request_id)
+    // through the live reducer instead of mapping one-to-one.
+    if (isDelegationEvent(e.type)) {
+      older = applyPatchToList(older, applyChatEvent(older, e));
+      continue;
+    }
+    const m = historyMsg(e);
     if (m) older.push(m);
   }
-  const merged = [...older, ...(state.convMap[conv] ?? [])];
+  const merged = mergeDelegationCards(older, state.convMap[conv] ?? []);
   // Respect the UI cap: keep the NEWEST UI_MESSAGE_CAP and stop loading.
   let next = merged;
   let capped = false;

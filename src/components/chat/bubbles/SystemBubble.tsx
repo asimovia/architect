@@ -13,9 +13,10 @@
  * retype what they wrote.
  */
 
-import { Show, createSignal } from 'solid-js';
+import { Match, Show, Switch, createSignal } from 'solid-js';
 import { chatStore, type ChatMsg } from '~/state/chat';
 import { daemonStore } from '~/state/daemon';
+import DelegationBubble from './DelegationBubble';
 
 type Tint = { border: string; dot: string; text: string };
 
@@ -39,9 +40,15 @@ function EngineDivider(props: { text: string }) {
 
 export function SystemBubble(props: { conv?: string; msg: ChatMsg }) {
   return (
-    <Show when={props.msg.system_kind === 'divider'} fallback={<AlertBubble conv={props.conv} msg={props.msg} />}>
-      <EngineDivider text={props.msg.text} />
-    </Show>
+    <Switch fallback={<AlertBubble conv={props.conv} msg={props.msg} />}>
+      <Match when={props.msg.system_kind === 'divider'}>
+        <EngineDivider text={props.msg.text} />
+      </Match>
+      {/* BT-17 — a delegated brief, as one card that updates in place. */}
+      <Match when={props.msg.system_kind === 'delegation' && props.msg.delegation}>
+        <DelegationBubble msg={props.msg} />
+      </Match>
+    </Switch>
   );
 }
 

@@ -16,6 +16,9 @@ import {
   humanSecs,
   isLongRunningWork,
   isStale,
+  describeAction,
+  idleActionLabel,
+  parseCurrentAction,
   parseProgress,
   progressLabel,
   type TurnProgress,
@@ -133,6 +136,7 @@ test('parse keeps the real numbers it is given', () => {
     tool_secs: 2520,
     tool_calls: 7,
     deltas: 120,
+    current_action: null,
     received_at: NOW,
   });
 });
@@ -141,4 +145,78 @@ test('the counters keep running between daemon frames (2026-09-28)', () => {
   // A frame received 17 s ago: every clock is 17 s further on, not frozen.
   const p = frame({ phase: 'tool', tool: 'bash', tool_secs: 4, elapsed_secs: 5820, received_at: NOW - 17_000 });
   assert.equal(progressLabel(p, NOW), 'bash 21s · turn 1h37m');
+});
+
+// BT-17 — "muse · thinking 54s · turn 3m16s" said nothing. With
+// `current_action` the line says what the agent is doing, in words.
+
+test('tool names map to what the operator reads', () => {
+  assert.equal(describeAction({ tool: 'Edit', target: 'web/src/App.tsx' }), 'editing web/src/App.tsx');
+  assert.equal(describeAction({ tool: 'Write', target: 'a.ts' }), 'editing a.ts');
+  assert.equal(describeAction({ tool: 'Read', target: 'README.md' }), 'reading README.md');
+  assert.equal(describeAction({ tool: 'Bash', target: 'npm test\nmore' }), 'running npm test');
+  assert.equal(describeAction({ tool: 'bash', target: null }), 'running a command');
+  assert.equal(describeAction({ tool: 'delegate', target: 'developer · #SEL1' }), 'waiting on developer · #SEL1');
+  assert.equal(describeAction({ tool: 'wait', target: null }), 'waiting on a teammate');
+  assert.equal(describeAction({ tool: 'Grep', target: 'turnProgress' }), 'searching turnProgress');
+  assert.equal(describeAction({ tool: 'TodoWrite', target: null }), 'updating its plan');
+  // Unknown tools are named as they are, not guessed at.
+  assert.equal(describeAction({ tool: 'Frobnicate', target: 'x' }), 'Frobnicate x');
+});
+
+test('long targets keep the part that tells you something', () => {
+  const path = 'architect/src/components/chat/bubbles/some/deeply/nested/DelegationBubble.tsx';
+  const got = describeAction({ tool: 'Edit', target: path });
+  assert.ok(got.startsWith('editing …'));
+  assert.ok(got.endsWith('DelegationBubble.tsx'));
+  const cmd = 'npm run build && npm test && npx wrangler pages deploy dist --project-name x';
+  const run = describeAction({ tool: 'Bash', target: cmd });
+  assert.ok(run.startsWith('running npm run build'));
+  assert.ok(run.endsWith('…'));
+});
+
+test('since parses as ISO or epoch; anything else yields no duration', () => {
+  assert.equal(parseCurrentAction({ tool: 'Edit', target: 'a', since: new Date(NOW - 12_000).toISOString() }, NOW)?.secs, 12);
+  assert.equal(parseCurrentAction({ tool: 'Edit', since: (NOW - 5_000) / 1000 }, NOW)?.secs, 5);
+  assert.equal(parseCurrentAction({ tool: 'Edit', since: 2e12 }, 2e12 + 4_000)?.secs, 4); // epoch ms
+  assert.equal(parseCurrentAction({ tool: 'Edit', since: 'yesterday-ish' }, NOW)?.secs, null);
+  assert.equal(parseCurrentAction({ target: 'a' }, NOW), null);
+  assert.equal(parseCurrentAction('Edit', NOW), null);
+  assert.equal(parseCurrentAction(null, NOW), null);
+});
+
+test('with current_action the line says what it is doing, keeping the turn time', () => {
+  const p = parseProgress(
+    {
+      elapsed_secs: 196,
+      phase: 'waiting',
+      idle_secs: 54,
+      current_action: { tool: 'Edit', target: 'web/src/App.tsx', since: new Date(NOW - 12_000).toISOString() },
+    },
+    NOW,
+  );
+  assert.equal(progressLabel(p!, NOW), 'editing web/src/App.tsx · 12s · turn 3m16s');
+  // Ages between frames like every other counter.
+  assert.equal(progressLabel(p!, NOW + 3_000), 'editing web/src/App.tsx · 15s · turn 3m19s');
+  const w = parseProgress({ elapsed_secs: 60, current_action: { tool: 'delegate', target: 'developer · #SEL1' } }, NOW);
+  assert.equal(progressLabel(w!, NOW), 'waiting on developer · #SEL1 · turn 1m00s');
+});
+
+test('without current_action the line is exactly what it was', () => {
+  const p = parseProgress({ elapsed_secs: 40, phase: 'waiting', idle_secs: 3 }, NOW);
+  assert.equal(progressLabel(p!, NOW), 'thinking · turn 40s');
+});
+
+test('an idle parent waiting on a delegate says so (final contract: tool "waiting")', () => {
+  const raw = {
+    tool: 'waiting',
+    target: 'developer · SEL1',
+    since: new Date(NOW - 240_000).toISOString(),
+    child_conv: 'mb-developer',
+    request_id: 'r1',
+  };
+  assert.equal(idleActionLabel(raw, NOW), 'waiting on developer · SEL1 · 4m00s');
+  assert.equal(idleActionLabel({ tool: 'waiting', target: 'developer · SEL1' }, NOW), 'waiting on developer · SEL1');
+  assert.equal(idleActionLabel(null, NOW), null);
+  assert.equal(idleActionLabel(undefined, NOW), null);
 });

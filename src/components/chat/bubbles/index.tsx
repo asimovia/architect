@@ -10,6 +10,7 @@
  *   UserBubble           operator turns (and mirrored daemon-authored ones)
  *   AssistantBubble      agent turns, incl. the validation renders
  *   SystemBubble         client-only in-band notices
+ *   DelegationBubble     BT-17 — one card per delegated brief (via SystemBubble)
  *   AutonomousRun        continuous timeline for self-driving agents
  *   PreparingBubble      dispatch accepted, first chunk pending
  *   ToolUse/TaskLifecycle structured daemon events
@@ -31,6 +32,7 @@ export { default as BubbleHeader } from './BubbleHeader';
 export { default as AttachmentGrid } from './AttachmentGrid';
 export { default as AutonomousRun } from './AutonomousRun';
 export { default as PreparingBubble } from './PreparingBubble';
+export { default as DelegationBubble } from './DelegationBubble';
 export { ToolUseBubble, TaskLifecycleBubble } from './EventBubbles';
 export { StreamingIdleHint, StreamingTail, ThinkingPlaceholder } from './streaming';
 export { formatBubbleTs } from './format';

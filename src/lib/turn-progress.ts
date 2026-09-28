@@ -32,9 +32,22 @@ export interface TurnProgress {
   tool_secs: number | null;
   tool_calls: number;
   deltas: number;
+  /** BT-17 — what the turn is doing, in the daemon's words: the open
+   *  tool and its target (`Edit web/src/App.tsx`, `Bash npm test`,
+   *  `delegate developer · #SEL1`). Absent on older daemons. */
+  current_action?: CurrentAction | null;
   /** Client clock when this frame was received — used to age the frame
    *  so a stale one is not presented as current. */
   received_at: number;
+}
+
+/** BT-17 — `current_action` on `conv.progress` / snapshot `current_turn`. */
+export interface CurrentAction {
+  tool: string;
+  target: string | null;
+  /** Seconds this action has been running, as of `received_at`. Derived
+   *  from the daemon's `since` when it parses; null otherwise. */
+  secs: number | null;
 }
 
 /** Compact duration: `8s`, `4m`, `1h12m`. Long turns are the whole point
@@ -82,6 +95,15 @@ export function progressLabel(
   // running, so age every counter by how long ago the frame arrived.
   const age = Math.max(0, (now - p.received_at) / 1000);
   const turn = `turn ${humanSecs(p.elapsed_secs + age)}`;
+  // BT-17 — "muse · thinking 54s · turn 3m16s" said nothing. When the
+  // daemon names the action, say it in words: `editing web/src/App.tsx
+  // · 12s · turn 3m16s`.
+  if (p.current_action) {
+    const what = describeAction(p.current_action);
+    const secs = p.current_action.secs;
+    const held = secs !== null ? ` · ${humanSecs(secs + age)}` : '';
+    return `${what}${held} · ${turn}`;
+  }
   if (p.phase === 'tool' && p.tool) {
     const held = p.tool_secs !== null && p.tool_secs !== undefined ? ` ${humanSecs(p.tool_secs + age)}` : '';
     return `${p.tool}${held} · ${turn}`;
@@ -136,6 +158,82 @@ export function parseProgress(
     tool_secs: num('tool_secs'),
     tool_calls: num('tool_calls') ?? 0,
     deltas: num('deltas') ?? 0,
+    current_action: parseCurrentAction(ev.current_action, now),
     received_at: now,
   };
+}
+
+/**
+ * BT-17 — the line for an IDLE conv that is still doing something
+ * between turns (the daemon's `convs[].current_action`, today only
+ * "waiting on <member> · <task>"). Null when there is nothing to say.
+ */
+export function idleActionLabel(raw: unknown, now: number): string | null {
+  const a = parseCurrentAction(raw, now);
+  if (!a) return null;
+  const what = describeAction(a);
+  return a.secs !== null ? `${what} · ${humanSecs(a.secs)}` : what;
+}
+
+/** Narrow `{tool, target, since}` from the wire. `since` may be an ISO
+ *  string or an epoch (seconds or ms); anything else leaves `secs` null
+ *  rather than inventing a duration. */
+export function parseCurrentAction(raw: unknown, now: number): CurrentAction | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const r = raw as Record<string, unknown>;
+  const tool = typeof r.tool === 'string' ? r.tool.trim() : '';
+  if (!tool) return null;
+  const target = typeof r.target === 'string' && r.target.trim() ? r.target.trim() : null;
+  let sinceMs: number | null = null;
+  if (typeof r.since === 'number' && Number.isFinite(r.since)) {
+    sinceMs = r.since < 1e12 ? r.since * 1000 : r.since;
+  } else if (typeof r.since === 'string' && r.since) {
+    const d = Date.parse(r.since);
+    if (!Number.isNaN(d)) sinceMs = d;
+  }
+  const secs = sinceMs !== null ? Math.max(0, (now - sinceMs) / 1000) : null;
+  return { tool, target, secs };
+}
+
+const ACTION_TARGET_MAX = 48;
+
+/** Keep the END of a long path/command — the file name is the part that
+ *  tells you something. */
+function clip(s: string, max = ACTION_TARGET_MAX): string {
+  const one = s.split('\n')[0]!.trim();
+  return one.length > max ? `…${one.slice(one.length - max + 1)}` : one;
+}
+
+/** A command reads from its START (`npm test …`), unlike a path. */
+function clipHead(s: string, max = ACTION_TARGET_MAX): string {
+  const one = s.split('\n')[0]!.trim();
+  return one.length > max ? `${one.slice(0, max - 1)}…` : one;
+}
+
+const EDIT_TOOLS = new Set(['edit', 'write', 'multiedit', 'notebookedit', 'apply_patch', 'str_replace', 'create']);
+const READ_TOOLS = new Set(['read', 'view', 'notebookread', 'cat']);
+const SEARCH_TOOLS = new Set(['grep', 'glob', 'search', 'find', 'ls']);
+const RUN_TOOLS = new Set(['bash', 'shell', 'exec', 'run', 'command', 'terminal']);
+const WAIT_TOOLS = new Set(['delegate', 'wait', 'waiting', 'delegate_wait', 'await']);
+const SUBAGENT_TOOLS = new Set(['task', 'agent']);
+
+/**
+ * Tool name + target → a phrase an operator reads at a glance.
+ *   Edit web/src/App.tsx   → `editing web/src/App.tsx`
+ *   Bash npm test -- --x   → `running npm test -- --x`
+ *   delegate developer · #SEL1 → `waiting on developer · #SEL1`
+ */
+export function describeAction(a: Pick<CurrentAction, 'tool' | 'target'>): string {
+  const key = a.tool.toLowerCase().replace(/^mcp__[^_]+(?:_[^_]+)*__/, '');
+  const t = a.target;
+  if (EDIT_TOOLS.has(key)) return t ? `editing ${clip(t)}` : 'editing a file';
+  if (READ_TOOLS.has(key)) return t ? `reading ${clip(t)}` : 'reading a file';
+  if (SEARCH_TOOLS.has(key)) return t ? `searching ${clipHead(t)}` : 'searching the code';
+  if (RUN_TOOLS.has(key)) return t ? `running ${clipHead(t)}` : 'running a command';
+  if (WAIT_TOOLS.has(key)) return t ? `waiting on ${clipHead(t)}` : 'waiting on a teammate';
+  if (SUBAGENT_TOOLS.has(key)) return t ? `subagent: ${clipHead(t)}` : 'running a subagent';
+  if (key === 'webfetch') return t ? `fetching ${clipHead(t)}` : 'fetching a page';
+  if (key === 'websearch') return t ? `searching the web: ${clipHead(t)}` : 'searching the web';
+  if (key === 'todowrite') return 'updating its plan';
+  return t ? `${a.tool} ${clipHead(t)}` : a.tool;
 }

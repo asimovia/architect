@@ -21,6 +21,7 @@
 import type { DaemonEvent } from '~/lib/daemon-client';
 // Relative + .ts so `node --test` can load this leaf (no `~` alias there).
 import { cleanChatText, keepAttachments, parseAttachments } from '../../lib/chat-sanitize.ts';
+import { applyDelegationEvent, isDelegationEvent, mergeCards, requestIdsOf } from '../../lib/delegation.ts';
 import type { ChatMsg } from './types';
 
 export type ChatEventPatch =
@@ -35,6 +36,15 @@ export type ChatEventPatch =
   | { op: 'patch-append'; index: number; fields: Partial<ChatMsg>; msg: ChatMsg }
   /** Replace the whole list (a final that also sweeps stale bubbles). */
   | { op: 'set'; list: ChatMsg[] };
+
+/** Index of the last assistant bubble still streaming, or -1. */
+function lastStreamingIdx(list: readonly ChatMsg[]): number {
+  for (let i = list.length - 1; i >= 0; i -= 1) {
+    const m = list[i]!;
+    if (m.kind === 'assistant' && m.streaming) return i;
+  }
+  return -1;
+}
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 const strOrUndef = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
@@ -152,7 +162,10 @@ export function applyChatEvent(list: readonly ChatMsg[], ev: DaemonEvent): ChatE
     // renders in the thread and comes back with the history; the streaming
     // bubble it interrupts stops pretending to be alive.
     case 'chat.error': {
-      const lastIdx = list.length - 1;
+      // BT-17 — a delegation card can land after the streaming bubble
+      // while the turn is still live, so "the bubble" is the last
+      // streaming assistant, not necessarily the last message.
+      const lastIdx = lastStreamingIdx(list);
       const last = list[lastIdx];
       const next: ChatMsg = {
         kind: 'system',
@@ -180,7 +193,7 @@ export function applyChatEvent(list: readonly ChatMsg[], ev: DaemonEvent): ChatE
       };
 
     case 'chat.cancelled': {
-      const lastIdx = list.length - 1;
+      const lastIdx = lastStreamingIdx(list);
       const last = list[lastIdx];
       if (last && last.kind === 'assistant' && last.streaming) {
         return { op: 'patch', index: lastIdx, fields: { streaming: false, cancelled: true } };
@@ -188,12 +201,78 @@ export function applyChatEvent(list: readonly ChatMsg[], ev: DaemonEvent): ChatE
       return { op: 'none' };
     }
 
+    // BT-17 — a delegation: ONE card per request_id in the parent's
+    // thread, updated in place by sent / progress / amended / report.
+    case 'delegate.sent':
+    case 'delegate.progress':
+    case 'delegate.amended':
+    case 'delegate.report':
+      return applyDelegation(list, ev);
+
     default:
       // py-1.11.0 Phase 2 — legacy `chat.archived` / `chat.unarchived`
       // were removed from the daemon's broadcast set; the snapshot.v1
       // path uses `conv.archived` / `conv.unarchived` instead.
       return { op: 'none' };
   }
+}
+
+function delegationMsg(card: NonNullable<ChatMsg['delegation']>): ChatMsg {
+  return { kind: 'system', system_kind: 'delegation', text: '', ts: card.ts, delegation: card };
+}
+
+/** Fold a `delegate.*` event into the card(s) it is about. A report that
+ *  answers several merged briefs updates every one of their cards. */
+function applyDelegation(list: readonly ChatMsg[], ev: DaemonEvent): ChatEventPatch {
+  if (!isDelegationEvent(ev.type)) return { op: 'none' };
+  const ids = requestIdsOf(ev);
+  if (ids.length === 0) return { op: 'none' };
+  const hits: Array<{ index: number; msg: ChatMsg }> = [];
+  list.forEach((m, index) => {
+    const rid = m.delegation?.request_id;
+    if (rid && ids.includes(rid)) hits.push({ index, msg: m });
+  });
+  if (hits.length === 0) {
+    const card = applyDelegationEvent(null, ids[0]!, ev);
+    return card ? { op: 'append', msg: delegationMsg(card) } : { op: 'none' };
+  }
+  if (hits.length === 1) {
+    const h = hits[0]!;
+    const card = applyDelegationEvent(h.msg.delegation!, h.msg.delegation!.request_id, ev);
+    return card ? { op: 'patch', index: h.index, fields: { delegation: card, ts: card.ts } } : { op: 'none' };
+  }
+  const next = list.slice();
+  for (const h of hits) {
+    const card = applyDelegationEvent(h.msg.delegation!, h.msg.delegation!.request_id, ev);
+    if (card) next[h.index] = { ...h.msg, delegation: card, ts: card.ts };
+  }
+  return { op: 'set', list: next };
+}
+
+/**
+ * Prepend an older history page to the loaded list. A delegation that
+ * straddles the page boundary has a card on BOTH sides (the older page
+ * saw `sent`, the newer one `report`): keep one, at the older position
+ * (where the delegation started), carrying what both know.
+ */
+export function mergeDelegationCards(older: ChatMsg[], newer: ChatMsg[]): ChatMsg[] {
+  const olderById = new Map<string, number>();
+  older.forEach((m, i) => {
+    if (m.delegation) olderById.set(m.delegation.request_id, i);
+  });
+  if (olderById.size === 0) return [...older, ...newer];
+  const head = older.slice();
+  const tail: ChatMsg[] = [];
+  for (const m of newer) {
+    const i = m.delegation ? olderById.get(m.delegation.request_id) : undefined;
+    if (i === undefined) {
+      tail.push(m);
+      continue;
+    }
+    const card = mergeCards(head[i]!.delegation!, m.delegation!);
+    head[i] = { ...head[i]!, delegation: card, ts: card.ts };
+  }
+  return [...head, ...tail];
 }
 
 /** Apply a patch to a plain array (the cached-slice sink). Returns the
