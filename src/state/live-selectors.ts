@@ -14,8 +14,9 @@
 
 import { chatStore } from '~/state/chat';
 import {
+  ARCHITECT_CONV_ID,
   isConvWorkingFrom,
-  pickLatestArchitectConv,
+  pickCoordinatorConv,
   pickUnanchoredLiveConvs,
   type ConvStateLike,
 } from '~/lib/conv-state';
@@ -35,22 +36,23 @@ export function isConvWorking(conv: string): boolean {
  * snapshot lands — is still addressable.
  */
 export function activeArchitectConv(): string | null {
-  const fromSnapshot = pickLatestArchitectConv(Object.values(chatStore.state.convs));
+  // BT-19 — the Architect is the only coordinator; the retired
+  // Orchestrator's `roadmap-architect-*` convs are history, never a target.
+  const fromSnapshot = pickCoordinatorConv(Object.values(chatStore.state.convs));
   if (fromSnapshot) return fromSnapshot;
-
-  const local: ConvStateLike[] = Object.entries(chatStore.state.convMeta).map(([conv, meta]) => ({
-    conv,
-    agent_type: meta.type ?? null,
-    archived: !!chatStore.state.archivedConvs[conv],
-    last_activity_at: (chatStore.state.convMap[conv] ?? []).at(-1)?.ts ?? '',
-  }));
-  return pickLatestArchitectConv(local);
+  const local: Array<ConvStateLike & { member?: string | null }> = Object.entries(chatStore.state.convMeta).map(
+    ([conv, meta]) => ({ conv, member: meta.member ?? null, archived: !!chatStore.state.archivedConvs[conv] }),
+  );
+  return pickCoordinatorConv(local) ?? ARCHITECT_CONV_ID;
 }
 
 /** True when the architect is mid-run — the queue bar's "is it busy". */
 export function isArchitectWorking(): boolean {
   const conv = activeArchitectConv();
-  return conv ? isConvWorking(conv) : false;
+  if (!conv) return false;
+  // BT-19 — between turns a running queue is the Architect WAITING on a
+  // delegate (`current_action`), which is still "running".
+  return isConvWorking(conv) || !!chatStore.state.convs[conv]?.current_action;
 }
 
 /**

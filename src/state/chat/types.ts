@@ -15,13 +15,14 @@ export type { ChatAttachment };
 
 export const ONBOARDING_CONV_ID = '_onboarding_v1';
 
-/** The two fixed/system agents present in every project: the Architect
- *  (`_onboarding_v1`, the planner) and the live Orchestrator
- *  conv (`roadmap-architect-*`, the queue executor). Neither can be
- *  archived, reordered, or removed from the rail's pinned head — see
- *  ChatRail's head/body split and AgentCard's draggable guard. */
+/** The fixed/system agent present in every project: the Architect
+ *  (`_onboarding_v1`). It cannot be archived, reordered, or removed from
+ *  the rail's pinned head — see ChatRail's head/body split and
+ *  AgentCard's draggable guard. BT-19 — the Orchestrator
+ *  (`roadmap-architect-*`) is retired; its old convs are ordinary,
+ *  archivable history. */
 export function isFixedAgentConv(conv: string | null | undefined): boolean {
-  return conv === ONBOARDING_CONV_ID || !!(conv && conv.startsWith('roadmap-architect-'));
+  return conv === ONBOARDING_CONV_ID;
 }
 
 export type AgentType =

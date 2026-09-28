@@ -1,5 +1,13 @@
 /**
- * architect-dispatch.ts — shared entrypoint for the Orchestrator.
+ * architect-dispatch.ts — shared entrypoint for running the roadmap.
+ *
+ * BT-19 (2026-09-29) — the Orchestrator is RETIRED; the Architect is the
+ * only coordinator. Run is one call, `POST /roadmap/run {initiatives}`:
+ * the daemon stages the queue, writes the kickoff turn itself (it owns
+ * the text) and runs it on the Architect's conv, returning which conv
+ * that is. The cockpit no longer creates a `roadmap-architect-*` conv,
+ * pushes the queue separately, or composes a bootstrap. The history
+ * below describes the pre-BT-19 flow.
  *
  * One function (`runArchitectOnScope`) drives both buttons:
  *   • Run All in the header → mode='all', scope = filtered active initiatives
@@ -39,6 +47,7 @@
 import { chatStore } from '~/state/chat';
 import { daemonStore } from '~/state/daemon';
 import { uiStore } from '~/state/ui';
+import { activeArchitectConv } from '~/state/live-selectors';
 import { log } from './log';
 
 /** One initiative in an execution scope. */
@@ -62,52 +71,16 @@ export interface ArchitectScope {
   display: RunDisplay;
 }
 
-/** Build the bootstrap turn the architect receives on Run All / Run
- *  initiative. Both variants speak the SAME SOP — the difference is
- *  the active scope line + the closure sentinel. The bootstrap does
- *  NOT repeat the dispatch / matrix / wake procedure; that lives in
- *  the system prompt (`AGENT_PROMPTS["roadmap-architect"]`) and stays
- *  unchanged so we don't drift the load-bearing instructions. */
-function buildBootstrap(scope: ArchitectScope): string {
-  const n = scope.initiatives.length;
-  return [
-    `Run the queue.`,
-    ``,
-    `The ${n} staged initiative${n === 1 ? '' : 's'} and, per task, whether it is READY / WAITING / BLOCKED right now are in your \`## Execution queue\` section — rebuilt from server state for every turn, including this one. That section is the scope; nothing else is.`,
-    ``,
-    `Work it top-down: dispatch the first READY task, put the right team member on it (\`## Your team\`), apply each verdict, and RE-READ the queue section on every wake — a task finishing can make an earlier position ready, and going back to it is the point.`,
-    ``,
-    `If the order is wrong — shipping something before the thing being shipped works, a gate that says NO-GO — say it in ONE line and name the swap you would make. Don't silently reorder, and don't add or rewrite roadmap items: that is the Architect's job.`,
-    ``,
-    `Follow your SOP. The chain on every blocker: DECISION CATALOG → STUB-AND-FLAG → DECISION MATRIX → CONSULT-A001. Never halt mid-pass; the single voluntary halt is the end-of-pass summary.`,
-    ``,
-    `Start now. Your very first line MUST be \`═══ VALIDATION GREEN ═══\` or \`═══ VALIDATION RED ═══\`. Be terse.`,
-  ].join('\n');
-}
-
-/** Find the cluster's roadmap-architect conv (live or idle, non-archived).
- *  Single coordinator by design — at most one survives. Returns null if
- *  none exists yet (cold cluster, or operator just archived it). */
+/** BT-19 — the Architect conv: `_onboarding_v1`, else the conv bound to
+ *  the `a01` member. Never a retired `roadmap-architect-*` conv. */
 function findArchitectConv(): string | null {
-  let best: { conv: string; ts: string } | null = null;
-  for (const c of Object.values(chatStore.state.convs)) {
-    if (c.archived) continue;
-    const isArchitect =
-      c.agent_type === 'roadmap-architect' ||
-      c.conv.startsWith('roadmap-architect-');
-    if (!isArchitect) continue;
-    const ts = c.last_activity_at || '';
-    if (!best || ts > best.ts) best = { conv: c.conv, ts };
-  }
-  return best?.conv ?? null;
+  return activeArchitectConv();
 }
 
-/** Single entrypoint for Run All AND per-initiative play. Reuses the
- *  cluster's architect conv if present (idle), spawns one otherwise,
- *  emits a UX marker into the debug stream, and posts the appropriate
- *  bootstrap turn. The cockpit's existing state machinery (rail
- *  spinners, button states, conv.activity WS events) reacts to the
- *  dispatch from there — no separate state to maintain. */
+/** Single entrypoint for Run queue AND per-initiative play: ask the daemon
+ *  to run the ordered list on the Architect, then show that conv. The
+ *  cockpit's existing state machinery (rail spinners, button states,
+ *  conv.activity WS events) reacts from there. */
 export async function runArchitectOnScope(scope: ArchitectScope): Promise<void> {
   const client = daemonStore.state.client;
   if (!client) {
@@ -118,65 +91,39 @@ export async function runArchitectOnScope(scope: ArchitectScope): Promise<void> 
     log.info('[architect-dispatch] empty scope — nothing to do');
     return;
   }
-
-  // ORC2 — make the server queue say exactly what we are asking it to run.
-  // The local list is already pruned of finished work; pushing it here means
-  // the Orchestrator's `## Execution queue` section and this button can
-  // never describe two different things.
-  const pushed = await client.roadmapQueueSet(scope.initiatives.map((it) => it.id));
-  if (!pushed.ok) {
-    log.warn('[architect-dispatch] could not publish the queue', { status: pushed.status });
-  }
-
-  const existing = findArchitectConv();
-  const conv = existing ?? chatStore.createConv({
-    type: 'roadmap-architect',
-    title: 'Orchestrator',
-    model: 'auto',
-  });
+  const ids = scope.initiatives.map((it) => it.id);
+  const res = await client.roadmapRun(ids);
+  const conv = res.ok && res.data.conv ? res.data.conv : findArchitectConv();
 
   uiStore.setActiveZone('architect');
-  chatStore.setActiveConv(conv);
-
-  const text = buildBootstrap(scope);
+  if (conv) chatStore.setActiveConv(conv);
 
   void import('./debug-transport').then(({ debugEmit }) => {
     debugEmit(
       'ux.run-architect',
-      `Run architect (${scope.display}, ${scope.initiatives.length} initiative(s))`,
+      `Run roadmap (${scope.display}, ${ids.length} initiative(s))`,
       {
-        conv,
+        conv: conv ?? undefined,
         data: {
           display: scope.display,
-          scope_size: scope.initiatives.length,
-          initiative_ids: scope.initiatives.map((it) => it.id),
-          reused_architect: !!existing,
+          scope_size: ids.length,
+          initiative_ids: ids,
+          ok: res.ok,
+          started: res.ok ? res.data.started : undefined,
+          queued: res.ok ? res.data.queued : undefined,
         },
       },
     );
   });
 
-  // Per-conv initiative_id is belt-and-braces only for a single-initiative run
-  // (a multi-initiative scope spans many → no single id belongs on the conv).
-  const onlyOne =
-    scope.initiatives.length === 1 ? scope.initiatives[0] : undefined;
-  const dispatchScope = onlyOne ? { initiative: onlyOne.id } : undefined;
-  const res = await chatStore.dispatchMessage(client, {
-    conv,
-    text,
-    author: 'architect',
-    scope: dispatchScope,
-  });
   if (!res.ok) {
-    log.error('[architect-dispatch] dispatch failed', { status: res.status, error: res.error });
+    log.error('[architect-dispatch] /roadmap/run failed', { status: res.status, error: res.error });
   }
 }
 
-/** Cancel the architect's in-flight turn. The conv stays visible
+/** Cancel the Architect's in-flight turn. The conv stays visible
  *  (operator can read the partial summary). Restart by clicking Run
- *  all / per-initiative play again — the SAME conv is reused with a
- *  fresh bootstrap. Idempotent: no-op if there's no architect or no
- *  live turn. */
+ *  again. Idempotent: no-op if there's no live turn. */
 export async function stopArchitect(): Promise<void> {
   const client = daemonStore.state.client;
   if (!client) return;

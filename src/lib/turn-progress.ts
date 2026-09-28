@@ -36,6 +36,8 @@ export interface TurnProgress {
    *  tool and its target (`Edit web/src/App.tsx`, `Bash npm test`,
    *  `delegate developer · #SEL1`). Absent on older daemons. */
   current_action?: CurrentAction | null;
+  /** BT-20 — this turn's tool calls by tool name. Absent on older daemons. */
+  action_counts?: Record<string, number>;
   /** Client clock when this frame was received — used to age the frame
    *  so a stale one is not presented as current. */
   received_at: number;
@@ -159,8 +161,51 @@ export function parseProgress(
     tool_calls: num('tool_calls') ?? 0,
     deltas: num('deltas') ?? 0,
     current_action: parseCurrentAction(ev.current_action, now),
+    action_counts: parseCounts(ev.action_counts),
     received_at: now,
   };
+}
+
+function parseCounts(raw: unknown): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof v === 'number' && Number.isFinite(v) && v > 0) out[k] = v;
+  }
+  return out;
+}
+
+/**
+ * BT-20 — what the turn has done so far, in ONE line: `12 reads ·
+ * 5 searches · 9 commands · 2 edits`. A child that only calls tools
+ * showed a single "running …" line and the operator could not tell what
+ * it had done for three minutes — but listing every call would be the
+ * raw CLI noise the chat exists to filter out. Null when there is
+ * nothing worth saying (fewer than 2 calls).
+ */
+export function workSummary(p: TurnProgress | undefined, now: number): string | null {
+  if (!p || isStale(p, now)) return null;
+  const counts = p.action_counts ?? {};
+  const by: Record<string, number> = {};
+  let total = 0;
+  for (const [tool, n] of Object.entries(counts)) {
+    const key = tool.toLowerCase().replace(/^mcp__[^_]+(?:_[^_]+)*__/, '');
+    const cat = EDIT_TOOLS.has(key) ? 'edit'
+      : READ_TOOLS.has(key) ? 'read'
+      : SEARCH_TOOLS.has(key) ? 'search'
+      : RUN_TOOLS.has(key) ? 'command'
+      : key === 'webfetch' || key === 'websearch' ? 'web lookup'
+      : key === 'todowrite' ? null
+      : 'other step';
+    total += n;
+    if (cat) by[cat] = (by[cat] ?? 0) + n;
+  }
+  if (total < 2) return null;
+  const order = ['edit', 'command', 'read', 'search', 'web lookup', 'other step'];
+  const plural = (w: string, n: number): string =>
+    n === 1 ? w : w === 'search' ? 'searches' : `${w}s`;
+  const parts = order.filter((c) => by[c]).map((c) => `${by[c]} ${plural(c, by[c]!)}`);
+  return parts.length ? `so far: ${parts.join(' · ')}` : null;
 }
 
 /**

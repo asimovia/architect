@@ -21,6 +21,7 @@ import {
   parseCurrentAction,
   parseProgress,
   progressLabel,
+  workSummary,
   type TurnProgress,
 } from './turn-progress.ts';
 
@@ -137,6 +138,7 @@ test('parse keeps the real numbers it is given', () => {
     tool_calls: 7,
     deltas: 120,
     current_action: null,
+    action_counts: {},
     received_at: NOW,
   });
 });
@@ -219,4 +221,19 @@ test('an idle parent waiting on a delegate says so (final contract: tool "waitin
   assert.equal(idleActionLabel({ tool: 'waiting', target: 'developer · SEL1' }, NOW), 'waiting on developer · SEL1');
   assert.equal(idleActionLabel(null, NOW), null);
   assert.equal(idleActionLabel(undefined, NOW), null);
+});
+
+test('BT-20 — one summary line of the work so far, never a call list', () => {
+  const now = Date.now();
+  const p = parseProgress(
+    {
+      elapsed_secs: 60,
+      action_counts: { Read: 12, Grep: 3, Glob: 2, Bash: 9, Edit: 1, TodoWrite: 4, bogus: 'x' },
+    },
+    now,
+  )!;
+  assert.equal(workSummary(p, now), 'so far: 1 edit · 9 commands · 12 reads · 5 searches');
+  assert.equal(workSummary(parseProgress({ elapsed_secs: 1, action_counts: { Read: 1 } }, now)!, now), null);
+  assert.equal(workSummary(parseProgress({ elapsed_secs: 1 }, now)!, now), null);
+  assert.equal(workSummary(undefined, now), null);
 });

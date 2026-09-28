@@ -15,6 +15,7 @@ import {
   isArchitectConv,
   pickLatestArchitectConv,
   pickUnanchoredLiveConvs,
+  pickCoordinatorConv,
 } from './conv-state.ts';
 
 test('isConvWorkingFrom: daemon live flag wins', () => {
@@ -57,6 +58,16 @@ test('isArchitectConv: slug counts even when the type field is corrupt', () => {
   assert.equal(isArchitectConv('roadmap-architect-7', undefined), true);
   assert.equal(isArchitectConv('anything', 'roadmap-architect'), true);
   assert.equal(isArchitectConv('work-CN1', 'work'), false);
+});
+
+test('pickCoordinatorConv (BT-19): the Architect, else the a01-bound conv, never an Orchestrator', () => {
+  assert.equal(
+    pickCoordinatorConv([{ conv: 'roadmap-architect-9' }, { conv: '_onboarding_v1' }, { conv: 'x', member: 'a01' }]),
+    '_onboarding_v1',
+  );
+  assert.equal(pickCoordinatorConv([{ conv: 'roadmap-architect-9' }, { conv: 'mb-a01', member: 'a01' }]), 'mb-a01');
+  assert.equal(pickCoordinatorConv([{ conv: 'roadmap-architect-9', agent_type: 'roadmap-architect' }]), null);
+  assert.equal(pickCoordinatorConv([{ conv: 'mb-a01', member: 'a01', archived: true }]), null);
 });
 
 test('pickLatestArchitectConv: newest activity wins, archived excluded', () => {

@@ -8,7 +8,7 @@
  * themselves on their first real turn.
  */
 
-import { pickLatestArchitectConv, type ConvStateLike } from '~/lib/conv-state';
+import { pickCoordinatorConv } from '~/lib/conv-state';
 import { state, setState } from './store';
 import { saveConvMeta, saveArchivedConvs, saveLastActiveConv } from './persistence';
 import { ONBOARDING_CONV_ID, isFixedAgentConv, type AgentType, type ConvMeta } from './types';
@@ -228,12 +228,17 @@ export function unarchiveConv(conv: string): void {
  * drift apart again.
  */
 export function findActiveArchitectConv(): string | null {
-  const candidates: ConvStateLike[] = Object.entries(state.convMeta).map(([conv, meta]) => ({
+  // BT-19 — the Orchestrator is retired: "a run is in progress" means the
+  // Architect is working or waiting on a delegate, not that some old
+  // `roadmap-architect-*` conv still exists.
+  const candidates = Object.entries(state.convMeta).map(([conv, meta]) => ({
     conv,
-    agent_type: meta.type ?? null,
+    member: meta.member ?? null,
     archived: !!state.archivedConvs[conv],
-    last_activity_at: (state.convMap[conv] ?? []).at(-1)?.ts ?? '',
   }));
-  return pickLatestArchitectConv(candidates);
+  const conv = pickCoordinatorConv(candidates);
+  if (!conv) return null;
+  const s = state.convs[conv];
+  return s && (s.live || s.coordinating || s.current_action) ? conv : null;
 }
 

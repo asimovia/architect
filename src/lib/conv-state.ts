@@ -89,6 +89,28 @@ export function pickUnanchoredLiveConvs(
   return out;
 }
 
+/**
+ * BT-19 — the ONE coordinator conv: the Architect (`_onboarding_v1`), or
+ * failing that the conv bound to the `a01` member. The Orchestrator
+ * (`roadmap-architect-*`) is retired; those convs are history only.
+ */
+export const ARCHITECT_CONV_ID = '_onboarding_v1';
+export const ARCHITECT_MEMBER_ID = 'a01';
+
+export function pickCoordinatorConv(
+  convs: readonly (ConvStateLike & { member?: string | null })[],
+): string | null {
+  let byMember: string | null = null;
+  for (const c of convs) {
+    if (c.archived) continue;
+    if (c.conv === ARCHITECT_CONV_ID) return c.conv;
+    if (!byMember && c.member === ARCHITECT_MEMBER_ID) byMember = c.conv;
+  }
+  return byMember;
+}
+
+/** Legacy: the most recent Orchestrator conv. Only history rendering
+ *  (validation banners on old threads) still needs to recognise one. */
 export function pickLatestArchitectConv(convs: readonly ConvStateLike[]): string | null {
   let best: string | null = null;
   let bestTs = '';

@@ -137,6 +137,7 @@ export interface ChatConvSummary {
    *  request_id}` while it waits on a delegated brief. Null/absent when
    *  there is nothing. (During a turn it rides `current_turn` instead.) */
   current_action?: unknown;
+  action_counts?: unknown;
   /** CU1 (daemon py-1.13.3) — cumulative token usage + cost for this
    *  conv. Absent until the first turn finalises. Resets on daemon
    *  restart. */

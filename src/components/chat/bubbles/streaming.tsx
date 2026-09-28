@@ -23,7 +23,7 @@
 
 import { Show, createEffect, createSignal, onCleanup, onMount } from 'solid-js';
 import { chatStore } from '~/state/chat';
-import { isLongRunningWork, progressLabel } from '~/lib/turn-progress';
+import { isLongRunningWork, progressLabel, workSummary } from '~/lib/turn-progress';
 import { ensureMarked } from '~/lib/cdn-loaders';
 import { colorizeInlineCodeInHtml } from '~/lib/code-colorize';
 
@@ -102,6 +102,20 @@ function useProgressLine(conv: () => string | undefined): () => string | null {
     const c = conv();
     if (!c) return null;
     return progressLabel(chatStore.state.turnProgress[c], nowMs());
+  };
+}
+
+/** BT-20 — one summary line of what the turn has done so far. */
+function useWorkSummary(conv: () => string | undefined): () => string | null {
+  const [nowMs, setNowMs] = createSignal(Date.now());
+  onMount(() => {
+    const iv = setInterval(() => setNowMs(Date.now()), 5000);
+    onCleanup(() => clearInterval(iv));
+  });
+  return () => {
+    const c = conv();
+    if (!c) return null;
+    return workSummary(chatStore.state.turnProgress[c], nowMs());
   };
 }
 
@@ -194,14 +208,21 @@ export function ThinkingPlaceholder(props: { conv?: string } = {}) {
   const verb = useRotatingVerb();
   const line = useProgressLine(() => props.conv);
   const longWork = useLongWork(() => props.conv);
+  const summary = useWorkSummary(() => props.conv);
   return (
-    <div class="flex items-center gap-2 text-emerald-300/90 italic min-w-0">
-      <Dots size="w-1.5 h-1.5" />
-      <Show
-        when={line()}
-        fallback={<span class="transition-opacity duration-300">{verb()}…</span>}
-      >
-        {(l) => <ActivityLine label={l()} longWork={longWork()} />}
+    <div class="flex flex-col gap-0.5 min-w-0">
+      <div class="flex items-center gap-2 text-emerald-300/90 italic min-w-0">
+        <Dots size="w-1.5 h-1.5" />
+        <Show
+          when={line()}
+          fallback={<span class="transition-opacity duration-300">{verb()}…</span>}
+        >
+          {(l) => <ActivityLine label={l()} longWork={longWork()} />}
+        </Show>
+      </div>
+      {/* BT-20 — what it has done so far, in one faded line. */}
+      <Show when={summary()}>
+        {(t) => <span class="pl-[18px] font-mono text-[11px] text-gray-500 truncate">{t()}</span>}
       </Show>
     </div>
   );

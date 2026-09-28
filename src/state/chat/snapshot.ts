@@ -51,6 +51,7 @@ type SnapshotConv = ChatConvSummary & {
     deltas_seen?: number;
     /** BT-17 — `{tool, target, since}`: what the turn is doing now. */
     current_action?: unknown;
+    action_counts?: unknown;
   };
   last_final_stream_id?: string;
   queue?: Array<{ id?: string; text: string; queued_at?: string }>;
@@ -166,6 +167,7 @@ function rehydrateTurn(c: SnapshotConv): boolean {
           tool_calls: ct.tool_calls_count ?? 0,
           deltas: ct.deltas_seen ?? 0,
           current_action: ct.current_action,
+          action_counts: ct.action_counts,
         },
         Date.now(),
       ),

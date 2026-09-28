@@ -50,7 +50,7 @@ export function QueueBar(props: {
         <Show
           when={!isArchitectWorking()}
           fallback={
-            <span class="rt-qbtn rt-qbtn-running" title="The queue is running — the Orchestrator is working">
+            <span class="rt-qbtn rt-qbtn-running" title="The queue is running — the Architect is working">
               <span class="rt-qbar-spinner" aria-hidden="true" /> Running…
             </span>
           }

@@ -54,6 +54,19 @@ export class RoadmapMethods extends ConfigMethods {
     );
   }
 
+  /** BT-19 — run the given initiatives, in order, on the Architect (the
+   *  only coordinator since the Orchestrator was retired). The daemon owns
+   *  the kickoff text and the queue; `202 {conv, initiatives, started,
+   *  queued}` names the conv that runs it. */
+  async roadmapRun(
+    initiatives: string[],
+    signal?: AbortSignal,
+  ): Promise<Result<{ conv: string; initiatives: string[]; started: boolean; queued: boolean }>> {
+    return this.request<{ conv: string; initiatives: string[]; started: boolean; queued: boolean }>(
+      'POST', '/roadmap/run', { initiatives }, signal,
+    );
+  }
+
   /** V86w — Per-initiative git activity. Returns commits whose
    *  subject/body mentions the initiative id, plus the files each
    *  commit touched. Multi-repo workspaces walk depth-1

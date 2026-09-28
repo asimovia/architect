@@ -13,7 +13,7 @@
  */
 
 import { Show, createSignal } from 'solid-js';
-import { chatStore, ONBOARDING_CONV_ID, isFixedAgentConv, type ConvMeta } from '~/state/chat';
+import { chatStore, ONBOARDING_CONV_ID, type ConvMeta } from '~/state/chat';
 import { resolveDisplayEngine } from '~/lib/member-shadow';
 import { teamStore } from '~/state/team';
 import { agentVisualInfo } from '~/lib/agent-types';
@@ -73,12 +73,6 @@ export default function ChatScopeStrip(props: Props) {
       return {
         name: 'Project architect',
         scope: 'context · roadmap · priorities — plans the work, never writes code',
-      };
-    }
-    if (isFixedAgentConv(props.conv)) {
-      return {
-        name: 'Orchestrator',
-        scope: 'runs the queue in order and hands each task to a team member — never writes code',
       };
     }
     return null;

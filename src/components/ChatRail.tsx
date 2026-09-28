@@ -46,10 +46,7 @@ export default function ChatRail() {
   //
   //   HEAD  (always recomputed; positions 0 + optional 1):
   //     - position 0 : Master (`_onboarding_v1`) — pinned
-  //     - position 1 : Primary roadmap-architect — most recent
-  //                    non-archived. Only ONE architect is "primary";
-  //                    older architects fall into the body. When the
-  //                    primary is archived, slot 1 collapses.
+  //     (BT-19: no Orchestrator slot any more — it was retired.)
   //
   //   BODY  (everything else, in a stable order that does NOT move
   //          when activity flips):
@@ -87,27 +84,10 @@ export default function ChatRail() {
     allSet.add(ONBOARDING_CONV_ID); // master is always present, even on a fresh cluster
     for (const c of allSet) chatStore.ensureConvMeta(c);
 
-    // ── Head: master + primary architect. ──
-    const isArchitect = (c: string): boolean => {
-      if (snapshotConvs[c]?.agent_type === 'roadmap-architect') return true;
-      return c.startsWith('roadmap-architect-');
-    };
-    const architectCandidates = [...allSet].filter(isArchitect);
-    architectCandidates.sort((a, b) => {
-      // Prefer live or coordinating over idle.
-      const aLive = (snapshotConvs[a]?.live || snapshotConvs[a]?.coordinating) ? 1 : 0;
-      const bLive = (snapshotConvs[b]?.live || snapshotConvs[b]?.coordinating) ? 1 : 0;
-      if (aLive !== bLive) return bLive - aLive;
-      // Tie-break: newest `created_at` wins (most recent spawn is the
-      // current pass; older architect convs fall into the body).
-      const aC = snapshotConvs[a]?.created_at ?? '';
-      const bC = snapshotConvs[b]?.created_at ?? '';
-      return bC.localeCompare(aC);
-    });
-    const primaryArchitect: string | null = architectCandidates[0] ?? null;
-
+    // ── Head: the Architect only. ──
+    // BT-19 — the Orchestrator is retired: a leftover `roadmap-architect-*`
+    // conv is plain history in the body (archivable), never a pinned slot.
     const head: string[] = [ONBOARDING_CONV_ID];
-    if (primaryArchitect) head.push(primaryArchitect);
 
     // ── Body: stable, never-reorder-on-activity. ──
     const pinned = new Set<string>(head);
