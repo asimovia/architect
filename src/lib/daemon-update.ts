@@ -25,21 +25,17 @@ export function isBusyRefusal(status: number, body?: string | null): boolean {
   return /turn in progress|busy/i.test(body ?? '');
 }
 
-/** "the Architect", "developer", "the Architect and developer", "3 agents". */
-export function busyWho(names: readonly string[]): string {
-  const uniq = [...new Set(names.filter((n) => n.trim()))];
-  if (uniq.length === 0) return 'the running turn';
-  if (uniq.length === 1) return uniq[0]!;
-  if (uniq.length === 2) return `${uniq[0]} and ${uniq[1]}`;
-  return `${uniq.length} agents`;
+/** How many live turns the update waits on. Names are not shown:
+ *  conv ids read as code and the operator skimmed past them. */
+export function busyCount(names: readonly string[]): number {
+  return new Set(names.filter((n) => n.trim())).size;
 }
 
+/** "Update pending — the daemon restarts when the 2 running tasks finish." */
 export function pendingLine(names: readonly string[]): string {
-  const who = busyWho(names);
-  const verb = names.length > 1 && who !== 'the running turn' ? 'finish their turns' : 'finishes its turn';
-  return who === 'the running turn'
-    ? 'Daemon update pending — it applies automatically when the running turn finishes'
-    : `Daemon update pending — it applies automatically when ${who} ${verb}`;
+  const n = busyCount(names);
+  const what = n <= 1 ? 'the running task finishes' : `the ${n} running tasks finish`;
+  return `Update pending — the daemon restarts when ${what}`;
 }
 
 export type UpdatePhase = 'idle' | 'updating' | 'pending' | 'failed' | 'disabled';
