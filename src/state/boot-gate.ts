@@ -122,19 +122,28 @@ function createBootGate(): BootGate {
  * The main area's state. Ordered by precedence — a daemon the cockpit
  * cannot talk to outranks anything it would otherwise render.
  *
- * `outdated` / `ahead` / `behind` are three genuinely distinct live
- * states with three different remedies (upgrade the daemon, reload the
- * cockpit, wait for the self-update) and must not be consolidated.
+ * `outdated` / `ahead` are distinct live states with different remedies
+ * (upgrade the daemon, reload the cockpit). BT-18 — `behind` is NOT a
+ * gate any more: a daemon between MIN and EXPECTED is compatible, so the
+ * workspace renders and `DaemonUpdateBanner` (see `daemonBehind`) runs
+ * the self-update without blocking.
  */
 export type CockpitGate =
   | 'connection'   // no daemon attached and the boot probe is unresolved
   | 'outdated'     // daemon below the minimum this cockpit supports
   | 'ahead'        // daemon ahead by ≥ minor; the wire format may have moved
-  | 'behind'       // daemon between MIN and EXPECTED; self-update path
   | 'offline'      // the operator selected an unreachable project
   | 'empty'        // no project selected
   | 'booting'      // first-ever visit, nothing paintable yet
   | 'ready';
+
+/** BT-18 — the daemon meets MIN but is older than EXPECTED: show the
+ *  non-blocking update banner. Never true while a hard gate applies. */
+export function daemonBehind(): boolean {
+  if (!daemonStore.state.activeId || daemonStore.state.outdated || daemonStore.state.ahead) return false;
+  const version = daemonStore.state.version;
+  return !!version && isDaemonBehind(version);
+}
 
 export function createCockpitGate(connectionUnresolved: () => boolean): {
   gate: () => CockpitGate;
@@ -145,8 +154,6 @@ export function createCockpitGate(connectionUnresolved: () => boolean): {
     if (!daemonStore.state.activeId && connectionUnresolved()) return 'connection';
     if (daemonStore.state.outdated) return 'outdated';
     if (daemonStore.state.ahead) return 'ahead';
-    const version = daemonStore.state.version;
-    if (version && isDaemonBehind(version)) return 'behind';
     if (daemonStore.state.offlineSelection) return 'offline';
     if (!daemonStore.state.activeId) return 'empty';
     if (!booted()) return 'booting';

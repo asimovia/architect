@@ -23,7 +23,8 @@ import RailEmptyPanel from '~/components/RailEmptyPanel';
 import DaemonOutdatedPanel from '~/components/DaemonOutdatedPanel';
 import DaemonAheadPanel from '~/components/DaemonAheadPanel';
 import BootingPanel from '~/components/BootingPanel';
-import DaemonBehindPanel from '~/components/DaemonBehindPanel';
+import DaemonUpdateBanner from '~/components/DaemonUpdateBanner';
+import { daemonBehind } from '~/state/boot-gate';
 // V106 — StoryBanner removed. Story-run progress is now visible
 // in: (a) the agent's live state in ChatRail, (b) the expanded
 // card's Activity tab. A floating sticky banner duplicates that
@@ -105,6 +106,10 @@ export default function Cockpit(props: {
     <div class="min-h-screen flex flex-col bg-canvas">
       <Header />
       <CockpitOutdatedBanner />
+      {/* BT-18 — a daemon that is only BEHIND is compatible: a strip,
+          never a wall (a 409 "turn in progress" used to lock the
+          operator out of the Architect whose turn caused it). */}
+      <Show when={daemonBehind()}><DaemonUpdateBanner /></Show>
       {/* V86k — ProjectsRail (left) + ChatPanel (right) are now PERMANENT
           across every top-bar zone. Only the two middle columns
           (modules tree + roadmap/tasks/context/diagrams content) get
@@ -142,7 +147,6 @@ export default function Cockpit(props: {
                 feedback: "todo lo que respecta al daemon bloquea el
                 proyecto, va al centro". Auto-fires /self-update on mount
                 when cluster.yaml permits. */}
-            <Match when={gate() === 'behind'}><DaemonBehindPanel /></Match>
             <Match when={gate() === 'offline'}><OfflinePanel /></Match>
             <Match when={gate() === 'empty'}><RailEmptyPanel /></Match>
             {/* CBO1 (2026-06-12) — boot overlay for a FIRST-EVER visit.
@@ -217,8 +221,9 @@ function RevalidatingChip(props: { show: boolean }) {
 }
 
 // 2026-06-12 — DaemonBehindBanner was removed (promoted to the
-// full-body DaemonBehindPanel per operator feedback: daemon-version
+// full-body DaemonBehindPanel per operator feedback (BT-18 turned it
+// back into a non-blocking strip, DaemonUpdateBanner): daemon-version
 // signals belong in the center, the thin top bar is reserved for
-// cockpit/UI signals). See DaemonBehindPanel.tsx.
+// cockpit/UI signals). See DaemonUpdateBanner.tsx.
 
 
