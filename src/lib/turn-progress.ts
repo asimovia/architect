@@ -43,7 +43,9 @@ export function humanSecs(secs: number): string {
   const s = Math.max(0, Math.floor(secs));
   if (s < 60) return `${s}s`;
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m`;
+  // Seconds stay visible under an hour so the operator can SEE it move
+  // (2026-09-28: "no se actualiza en tiempo real").
+  if (m < 60) return `${m}m${String(s % 60).padStart(2, '0')}s`;
   const h = Math.floor(m / 60);
   const rem = m % 60;
   return rem === 0 ? `${h}h` : `${h}h${rem}m`;
@@ -76,17 +78,20 @@ export function progressLabel(
   now: number,
 ): string | null {
   if (!p || isStale(p, now)) return null;
-  const turn = `turn ${humanSecs(p.elapsed_secs)}`;
+  // The daemon sends a frame every ~30 s; between frames the clocks keep
+  // running, so age every counter by how long ago the frame arrived.
+  const age = Math.max(0, (now - p.received_at) / 1000);
+  const turn = `turn ${humanSecs(p.elapsed_secs + age)}`;
   if (p.phase === 'tool' && p.tool) {
-    const held = p.tool_secs !== null && p.tool_secs !== undefined ? ` ${humanSecs(p.tool_secs)}` : '';
+    const held = p.tool_secs !== null && p.tool_secs !== undefined ? ` ${humanSecs(p.tool_secs + age)}` : '';
     return `${p.tool}${held} · ${turn}`;
   }
   if (p.phase === 'streaming') return `writing · ${turn}`;
   // `waiting` with a long idle is the one case worth spelling out: it is
   // the shape a genuinely stuck turn has, and the operator deciding
   // whether to press Stop needs to see it rather than read "Thinking…".
-  if (p.idle_secs >= 60) {
-    return `quiet ${humanSecs(p.idle_secs)} · ${turn}`;
+  if (p.idle_secs + age >= 60) {
+    return `quiet ${humanSecs(p.idle_secs + age)} · ${turn}`;
   }
   return `thinking · ${turn}`;
 }

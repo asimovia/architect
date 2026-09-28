@@ -40,8 +40,9 @@ function frame(over: Partial<TurnProgress> = {}): TurnProgress {
 test('hours stay readable — long turns are the point of the feature', () => {
   assert.equal(humanSecs(8), '8s');
   assert.equal(humanSecs(59), '59s');
-  assert.equal(humanSecs(60), '1m');
-  assert.equal(humanSecs(2520), '42m');
+  assert.equal(humanSecs(60), '1m00s');
+  assert.equal(humanSecs(252), '4m12s');
+  assert.equal(humanSecs(2520), '42m00s');
   assert.equal(humanSecs(3600), '1h');
   assert.equal(humanSecs(4320), '1h12m');
   assert.equal(humanSecs(-5), '0s');
@@ -52,7 +53,7 @@ test('a turn inside a tool names the tool and how long it has been there', () =>
     frame({ phase: 'tool', tool: 'Bash', tool_secs: 2520, elapsed_secs: 4320 }),
     NOW,
   );
-  assert.equal(label, 'Bash 42m · turn 1h12m');
+  assert.equal(label, 'Bash 42m00s · turn 1h12m');
 });
 
 test('a long silence is spelled out, not dressed up as thinking', () => {
@@ -60,7 +61,7 @@ test('a long silence is spelled out, not dressed up as thinking', () => {
   // itself; "Thinking…" is exactly what hid it.
   assert.equal(
     progressLabel(frame({ phase: 'waiting', idle_secs: 300, elapsed_secs: 900 }), NOW),
-    'quiet 5m · turn 15m',
+    'quiet 5m00s · turn 15m00s',
   );
 });
 
@@ -134,4 +135,10 @@ test('parse keeps the real numbers it is given', () => {
     deltas: 120,
     received_at: NOW,
   });
+});
+
+test('the counters keep running between daemon frames (2026-09-28)', () => {
+  // A frame received 17 s ago: every clock is 17 s further on, not frozen.
+  const p = frame({ phase: 'tool', tool: 'bash', tool_secs: 4, elapsed_secs: 5820, received_at: NOW - 17_000 });
+  assert.equal(progressLabel(p, NOW), 'bash 21s · turn 1h37m');
 });
