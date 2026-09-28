@@ -15,8 +15,8 @@ export default function JobsHeader(props: {
   disabled: boolean;
 }) {
   return (
-    <header class="flex items-start justify-between gap-4">
-      <div class="min-w-0">
+    <header class="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+      <div class="min-w-[14rem] flex-1">
         <h1 class="text-lg font-bold text-gray-100">Jobs</h1>
         <p class="text-xs text-gray-500 mt-0.5">
           Long-lived processes the daemon owns — they survive this browser.

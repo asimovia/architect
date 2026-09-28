@@ -4,8 +4,8 @@ import type { CronListResponse } from '~/lib/daemon-client';
 
 export default function CronsHeader(props: { data: CronListResponse | null }) {
   return (
-    <header class="flex items-center justify-between gap-4">
-      <div>
+    <header class="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+      <div class="min-w-[14rem] flex-1">
         <h1 class="text-lg font-bold text-gray-100">Crons</h1>
         <p class="text-xs text-gray-500 mt-0.5">
           Jobs declared in <span class="font-mono text-gray-400">cluster.yaml.crons</span>.
@@ -15,7 +15,7 @@ export default function CronsHeader(props: { data: CronListResponse | null }) {
       </div>
       <Show when={props.data}>
         {(d) => (
-          <div class="flex items-center gap-2 text-[11px] font-mono">
+          <div class="flex flex-wrap items-center gap-2 text-[11px] font-mono">
             <span class="px-2 py-1 rounded-md bg-gray-900/60 border border-gray-800 text-gray-400">
               tick {d().tick_sec}s
             </span>
