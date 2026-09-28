@@ -27,6 +27,7 @@ import { log } from '~/lib/log';
 import { fitAttached, shrinkImage } from '~/lib/image-shrink';
 import type { ChatQueueItem } from '~/lib/daemon-client';
 import StopButton from '~/components/chat/strip/StopButton';
+import AttachmentGrid from '~/components/chat/bubbles/AttachmentGrid';
 
 const ACCEPT = 'image/*,.md,.txt,.pdf,.json,.yaml,.yml,.csv,.log';
 const MAX_IMAGES = 6;
@@ -98,15 +99,18 @@ export default function ChatComposer(props: {
   // independiente en esa post queue."
   const enqueue = async (): Promise<void> => {
     const text = draft().trim();
-    if (sending() || !text) return;
+    const pending = imgs();
+    if (sending() || (!text && pending.length === 0)) return;
     const cli = daemonStore.state.client;
     if (!cli) return;
     setSending(true);
+    // ATT1 — a queued message keeps its images (they used to be dropped).
+    const queuedImgs = await Promise.all(pending.map(fitAttached));
     setDraft(''); setImgs([]); setDocs([]); grow();
-    const res = await cli.queueEnqueue(props.conv, text);
+    const res = await cli.queueEnqueue(props.conv, text, queuedImgs);
     setSending(false);
     if (!res.ok) {
-      setDraft(text); grow();
+      setDraft(text); setImgs(pending); grow();
       log.warn('queue enqueue failed', { status: res.status });
       if (res.status === 401) props.onTokenRejected?.(text);
     } else {
@@ -285,7 +289,7 @@ export default function ChatComposer(props: {
               dispatch. Standard v16. */}
           <Show when={showQueueBtn()}>
             <button type="button" title="Queue for after current turn" onClick={() => void enqueue()}
-              disabled={sending() || !draft().trim()}
+              disabled={sending() || (!draft().trim() && imgs().length === 0)}
               class="inline-flex items-center justify-center w-8 h-8 rounded text-sky-300 hover:text-sky-200 hover:bg-sky-500/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent">
               {/* Clock icon. */}
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -430,14 +434,20 @@ function QueuePanel(props: {
               <Show
                 when={editingId() === it.id}
                 fallback={
-                  <button
-                    type="button"
-                    onClick={() => beginEdit(it)}
-                    class="flex-1 text-left text-gray-300 hover:text-gray-100 leading-snug break-words min-w-0"
-                    title="Click to edit"
-                  >
-                    {it.text}
-                  </button>
+                  <div class="flex-1 min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => beginEdit(it)}
+                      class="w-full text-left text-gray-300 hover:text-gray-100 leading-snug break-words min-w-0"
+                      title="Click to edit"
+                    >
+                      {it.text}
+                    </button>
+                    {/* ATT1 — the images that go with this queued message. */}
+                    <Show when={(it.attachments ?? []).length > 0}>
+                      <AttachmentGrid attachments={it.attachments ?? []} align="left" />
+                    </Show>
+                  </div>
                 }
               >
                 <textarea

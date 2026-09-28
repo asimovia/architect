@@ -113,9 +113,23 @@ export class ChatMethods extends RoadmapMethods {
     );
   }
 
-  async queueEnqueue(conv: string, text: string, signal?: AbortSignal): Promise<Result<ChatQueueItem>> {
+  async queueEnqueue(
+    conv: string,
+    text: string,
+    images: ReadonlyArray<{ dataURL: string; mediaType: string }> = [],
+    signal?: AbortSignal,
+  ): Promise<Result<ChatQueueItem>> {
+    // ATT1 — images ride with the queued item, same shape as /chat/dispatch.
+    const body: Record<string, unknown> = { text };
+    if (images.length) {
+      body.images = images.map((i) => ({
+        type: 'image',
+        media_type: i.mediaType,
+        data: i.dataURL.includes(',') ? i.dataURL.split(',')[1] ?? '' : i.dataURL,
+      }));
+    }
     return this.request<ChatQueueItem>(
-      'POST', `/chat/conv/${encodeURIComponent(conv)}/queue`, { text }, signal,
+      'POST', `/chat/conv/${encodeURIComponent(conv)}/queue`, body, signal,
     );
   }
 

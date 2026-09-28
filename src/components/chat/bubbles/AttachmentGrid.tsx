@@ -82,8 +82,14 @@ function Thumb(props: { href: string; alt: string }) {
   );
 }
 
-export function AttachmentGrid(props: { msg: ChatMsg; align: 'left' | 'right' }) {
-  const list = (): NonNullable<ChatMsg['attachments']> => props.msg.attachments ?? [];
+export function AttachmentGrid(props: {
+  msg?: ChatMsg;
+  /** ATT1 — a queued item's attachments (no ChatMsg yet). */
+  attachments?: NonNullable<ChatMsg['attachments']>;
+  align: 'left' | 'right';
+}) {
+  const list = (): NonNullable<ChatMsg['attachments']> =>
+    props.attachments ?? props.msg?.attachments ?? [];
   return (
     <div
       class={`mt-1 flex flex-wrap gap-1.5 max-w-[85%] ${

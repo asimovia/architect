@@ -2,7 +2,7 @@
  * types/chat.ts — conversation surface: dispatch, the py-1.11.0 snapshot
  * API (chat-state-rearchitecture) and the Standard v16 turn queue.
  */
-
+import type { ChatAttachment } from '~/lib/chat-sanitize';
 import type { DaemonEvent } from './system';
 
 export interface DispatchResponse {
@@ -65,6 +65,8 @@ export interface ChatQueueItem {
   status: QueueItemStatus;
   sent_at?: string;
   failed_reason?: string;
+  /** ATT1 — images saved with the queued message (upload manifest). */
+  attachments?: ChatAttachment[];
 }
 export interface ChatQueueResponse {
   conv: string;
