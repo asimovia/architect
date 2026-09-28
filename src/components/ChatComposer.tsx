@@ -24,6 +24,7 @@ import { useComposerDraft } from '~/components/chat/use-composer-draft';
 import { isValidationRed } from '~/components/architect/ValidationBlock';
 import { debugEmit } from '~/lib/debug-transport';
 import { log } from '~/lib/log';
+import { fitAttached, shrinkImage } from '~/lib/image-shrink';
 import type { ChatQueueItem } from '~/lib/daemon-client';
 import StopButton from '~/components/chat/strip/StopButton';
 
@@ -120,9 +121,10 @@ export default function ChatComposer(props: {
   const addFile = (file: File) => {
     if ((file.type || '').startsWith('image/')) {
       if (imgs().length >= MAX_IMAGES) return;
-      const r = new FileReader();
-      r.onload = (e) => setImgs((xs) => [...xs, { dataURL: String(e.target?.result ?? ''), mediaType: file.type }]);
-      r.readAsDataURL(file);
+      // IMG1 — re-encode to fit the daemon's 4 MB body cap (inline base64).
+      void shrinkImage(file).then((img) => {
+        if (imgs().length < MAX_IMAGES) setImgs((xs) => [...xs, img]);
+      });
     } else {
       const r = new FileReader();
       r.onload = (e) => setDocs((xs) => [...xs, { filename: file.name, content: String(e.target?.result ?? '') }]);
@@ -143,7 +145,8 @@ export default function ChatComposer(props: {
     // queue. The clock-icon button is for the post-WIP disk queue
     // (case 2) instead. Operator clarification 2026-06-10.
     setSending(true);
-    const sentImgs = imgs();
+    // IMG1 — anything still over budget (restored after a 413) is shrunk now.
+    const sentImgs = await Promise.all(imgs().map(fitAttached));
     const sentDocs = docs();
     const contextDocs = [...sentDocs];
     if (
