@@ -47,6 +47,8 @@ export default function ChatComposer(props: {
   onDaemonOutdated?: () => void;
 }) {
   const [sending, setSending] = createSignal(false);
+  /** ATT2 — a plain-words warning above the input (images not kept). */
+  const [notice, setNotice] = createSignal<string | null>(null);
   let fileEl: HTMLInputElement | undefined;
   let taEl: HTMLTextAreaElement | undefined;
 
@@ -109,6 +111,13 @@ export default function ChatComposer(props: {
     setDraft(''); setImgs([]); setDocs([]); grow();
     const res = await cli.queueEnqueue(props.conv, text, queuedImgs);
     setSending(false);
+    // ATT2 — a daemon that predates queued attachments (< py-1.42.1)
+    // accepts the text and silently drops the images. Never lose them:
+    // put them back in the box and say so.
+    if (res.ok && queuedImgs.length > (res.data.attachments?.length ?? 0)) {
+      setImgs(pending);
+      setNotice('The images were not queued — the daemon has not updated yet. They are back in the box: send them now, or queue them again after the update.');
+    }
     if (!res.ok) {
       setDraft(text); setImgs(pending); grow();
       log.warn('queue enqueue failed', { status: res.status });
@@ -230,6 +239,14 @@ export default function ChatComposer(props: {
             </div>
           )}</For>
         </div>
+      </Show>
+      <Show when={notice()}>
+        {(n) => (
+          <div class="flex items-start gap-2 px-2 py-1.5 rounded border border-amber-500/40 bg-amber-500/10 text-[12px] text-amber-200">
+            <span class="flex-1">{n()}</span>
+            <button type="button" class="text-amber-300/70 hover:text-amber-100" onClick={() => setNotice(null)}>✕</button>
+          </div>
+        )}
       </Show>
       {/* V107.41 — Queued turns (Standard v16). Renders above the input
           when there are items waiting. Max 30vh, scrolls overflow.
