@@ -114,7 +114,7 @@ export default function ChatComposer(props: {
     // ATT2 — a daemon that predates queued attachments (< py-1.42.1)
     // accepts the text and silently drops the images. Never lose them:
     // put them back in the box and say so.
-    if (res.ok && queuedImgs.length > (res.data.attachments?.length ?? 0)) {
+    if (res.ok && queuedImgs.length > (res.data.item?.attachments?.length ?? 0)) {
       setImgs(pending);
       setNotice('The images were not queued — the daemon has not updated yet. They are back in the box: send them now, or queue them again after the update.');
     }

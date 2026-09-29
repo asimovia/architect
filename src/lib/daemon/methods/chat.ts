@@ -118,7 +118,7 @@ export class ChatMethods extends RoadmapMethods {
     text: string,
     images: ReadonlyArray<{ dataURL: string; mediaType: string }> = [],
     signal?: AbortSignal,
-  ): Promise<Result<ChatQueueItem>> {
+  ): Promise<Result<{ conv: string; item: ChatQueueItem }>> {
     // ATT1 — images ride with the queued item, same shape as /chat/dispatch.
     const body: Record<string, unknown> = { text };
     if (images.length) {
@@ -128,7 +128,8 @@ export class ChatMethods extends RoadmapMethods {
         data: i.dataURL.includes(',') ? i.dataURL.split(',')[1] ?? '' : i.dataURL,
       }));
     }
-    return this.request<ChatQueueItem>(
+    // The daemon answers `{conv, item}` — not the bare item (ATT3).
+    return this.request<{ conv: string; item: ChatQueueItem }>(
       'POST', `/chat/conv/${encodeURIComponent(conv)}/queue`, body, signal,
     );
   }
