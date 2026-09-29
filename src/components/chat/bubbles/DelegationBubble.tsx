@@ -18,6 +18,7 @@ import {
 } from '~/lib/delegation';
 import { progressLabel } from '~/lib/turn-progress';
 import { formatBubbleTs } from './format';
+import { AgentRack, type RackState } from './AgentRack';
 
 const PILL: Record<DelegationStatus, string> = {
   working: 'text-emerald-200 border-emerald-500/40 bg-emerald-500/10',
@@ -29,15 +30,14 @@ const PILL: Record<DelegationStatus, string> = {
 
 /** `no_report` — neutral, not red: the outcome is unknown, not a failure. */
 const NO_REPORT_PILL = 'text-gray-300 border-gray-500/40 bg-gray-500/10';
-const NO_REPORT_EDGE = 'rgba(156, 163, 175, 0.5)';
 
-const EDGE: Record<DelegationStatus, string> = {
-  working: 'rgba(52, 211, 153, 0.55)',
-  success: 'rgba(52, 211, 153, 0.35)',
-  partial: 'rgba(245, 158, 11, 0.55)',
-  failed: 'rgba(239, 68, 68, 0.6)',
-  blocked: 'rgba(245, 158, 11, 0.55)',
-};
+function rackState(c: DelegationCard): RackState {
+  if (c.no_report) return 'unknown';
+  if (c.status === 'working') return 'working';
+  if (c.status === 'success') return 'success';
+  if (c.status === 'failed') return 'failed';
+  return 'partial';
+}
 
 /** The child's own live activity line, while its turn runs. 1 s tick so
  *  the durations keep moving between the daemon's frames. */
@@ -69,18 +69,17 @@ export function DelegationBubble(props: { msg: ChatMsg }) {
         onClick={open}
         disabled={!card().child_conv}
         title={card().child_conv ? `Open ${card().child_conv}` : undefined}
-        class="w-full max-w-[85%] text-left rounded px-3 py-2 bg-gray-800/30 hover:bg-gray-800/60 transition-colors disabled:cursor-default"
-        style={{ 'border-left': `3px solid ${card().no_report ? NO_REPORT_EDGE : EDGE[card().status]}` }}
+        class="w-full max-w-[85%] text-left rounded-lg px-2.5 py-2 border border-gray-800 bg-gray-800/25 hover:bg-gray-800/50 hover:border-gray-700 transition-colors disabled:cursor-default flex items-start gap-2.5"
       >
+        {/* DLG2 — a status tile instead of a coloured left bar. */}
+        <AgentRack state={rackState(card())} title={statusLabel(card().status, !!card().no_report)} />
+        <div class="flex-1 min-w-0">
         <div class="flex items-center gap-2 min-w-0 text-[12px]">
           <span class="text-gray-500 flex-shrink-0">→ Delegated to</span>
           <span class="font-semibold text-gray-200 truncate">{cardTitle(card())}</span>
           <span
             class={`font-mono text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 ${card().no_report ? NO_REPORT_PILL : PILL[card().status]}`}
           >
-            <Show when={card().status === 'working'}>
-              <span class="inline-block w-1.5 h-1.5 mr-1 rounded-full bg-emerald-400 animate-pulse-soft align-middle" />
-            </Show>
             {statusLabel(card().status, !!card().no_report)}
           </span>
           <Show when={card().amendments > 0}>
@@ -125,6 +124,7 @@ export function DelegationBubble(props: { msg: ChatMsg }) {
             <div class="mt-1 font-mono text-[10.5px] text-gray-500">commit {commit()}</div>
           </Show>
         </Show>
+        </div>
       </button>
     </div>
   );

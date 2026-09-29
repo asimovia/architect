@@ -1,0 +1,31 @@
+/* DLG2 — the delegation card's status tile: a tiny server rack.
+ * Working: LEDs flicker out of step (disk/net activity) and a faint
+ * packet of light travels down the units. Finished: steady LEDs in the
+ * outcome's colour. Replaces the coloured left bar (already the rail's
+ * language for agents and projects). */
+
+.agent-rack .rack-unit { fill: rgba(31, 41, 55, 0.9); stroke: rgba(75, 85, 99, 0.8); stroke-width: 0.6; }
+.agent-rack .rack-slot { stroke: rgba(107, 114, 128, 0.7); stroke-width: 0.8; stroke-linecap: round; }
+.agent-rack .rack-led { fill: var(--rack-led, rgb(52, 211, 153)); }
+.agent-rack .rack-scan { fill: var(--rack-led, rgb(52, 211, 153)); opacity: 0; }
+
+.agent-rack--working .rack-led { animation: rack-blink 1.3s steps(2, jump-none) infinite; }
+.agent-rack--working .rack-led:nth-of-type(2n) { animation-duration: 0.9s; }
+.agent-rack--working .rack-led:nth-of-type(3n) { animation-duration: 1.7s; }
+.agent-rack--working .rack-scan { animation: rack-scan 2.4s ease-in-out infinite; }
+
+@keyframes rack-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.18; }
+}
+@keyframes rack-scan {
+  0% { transform: translateY(0); opacity: 0; }
+  15% { opacity: 0.35; }
+  70% { opacity: 0.35; }
+  100% { transform: translateY(14px); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-rack--working .rack-led,
+  .agent-rack--working .rack-scan { animation: none; }
+}
