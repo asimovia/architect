@@ -222,6 +222,19 @@ export default function ChatComposer(props: {
   return (
     <div class="flex flex-col gap-1.5 p-3 border-t border-gray-800/60"
       onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
+      {/* ATT4 — the queue sits on top; what you are about to send (the
+          attachments and any notice about them) sits right on the input.
+          V107.41 — Queued turns (Standard v16). Renders above the input
+          when there are items waiting. Max 30vh, scrolls overflow.
+          Each row: drag handle (left) + editable text + ✕ delete. */}
+      <Show when={queueItems().length > 0}>
+        <QueuePanel
+          items={queueItems()}
+          onEdit={(id, text) => void editQueued(id, text)}
+          onDelete={(id) => void deleteQueued(id)}
+          onMove={(id, position) => void moveQueued(id, position)}
+        />
+      </Show>
       <Show when={imgs().length || docs().length}>
         <div class="flex flex-wrap gap-1.5">
           <For each={imgs()}>{(img, i) => (
@@ -247,17 +260,6 @@ export default function ChatComposer(props: {
             <button type="button" class="text-amber-300/70 hover:text-amber-100" onClick={() => setNotice(null)}>✕</button>
           </div>
         )}
-      </Show>
-      {/* V107.41 — Queued turns (Standard v16). Renders above the input
-          when there are items waiting. Max 30vh, scrolls overflow.
-          Each row: drag handle (left) + editable text + ✕ delete. */}
-      <Show when={queueItems().length > 0}>
-        <QueuePanel
-          items={queueItems()}
-          onEdit={(id, text) => void editQueued(id, text)}
-          onDelete={(id) => void deleteQueued(id)}
-          onMove={(id, position) => void moveQueued(id, position)}
-        />
       </Show>
       {/* V86n — Recovered the textarea width: send + attach are now
           chrome-less icon buttons stacked vertically to the right.
