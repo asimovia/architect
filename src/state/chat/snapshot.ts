@@ -11,7 +11,7 @@
  * painted is overwritten, and `convsStale` clears.
  */
 
-import type { ChatConvSummary, ChatQueueItem, ChatSnapshotResponse } from '~/lib/daemon-client';
+import type { ChatConvSummary, ChatSnapshotResponse } from '~/lib/daemon-client';
 import { log } from '~/lib/log';
 import { parseProgress } from '~/lib/turn-progress';
 import { cleanChatText } from '~/lib/chat-sanitize';
@@ -198,21 +198,14 @@ function rehydrateTurn(c: SnapshotConv): boolean {
   return true;
 }
 
-/** The snapshot carries only PENDING queue items — the head, mid-flight,
- *  is the streaming bubble itself, not a queue entry. */
-function rehydrateQueue(c: SnapshotConv): boolean {
-  const items = c.queue;
-  if (!items || items.length === 0) return false;
-  const mapped: ChatQueueItem[] = items.map((q, i) => ({
-    id: q.id ?? `q_${i}`,
-    text: q.text,
-    created_at: q.queued_at || new Date().toISOString(),
-    position: i,
-    status: 'queued' as const,
-  }));
-  setState('queues', c.conv, mapped);
-  return true;
-}
+/* QGH1 — the snapshot's `queue` is the in-memory list of messages that
+ * MERGE INTO THE NEXT TURN (ChatSessions.pending), not the disk queue the
+ * queue panel shows. Writing it into `queues` put those messages in the
+ * panel as "runs after the current turn", and since consuming them emits
+ * no queue.item.* event they stayed there forever (mf27, 2026-09-30: a
+ * message the Architect had already executed still showed "1 waiting").
+ * The disk queue hydrates from its own endpoint (`hydrateQueue`); the
+ * pending messages already show in the thread as "merges into next turn". */
 
 export interface HydrateSnapshotOpts {
   /**
@@ -252,7 +245,6 @@ export function hydrateFromSnapshot(
   if (!stale) saveConvMeta();
 
   let rehydratedTurns = 0;
-  let rehydratedQueues = 0;
   // A cached payload describes a PREVIOUS session: a turn it calls live
   // has no daemon feeding it, so seeding the working set or a streaming
   // bubble from it would strand a spinner. (The trim drops `current_turn`
@@ -261,7 +253,6 @@ export function hydrateFromSnapshot(
     seedWorkingConvs(snap.convs);
     for (const c of snap.convs as SnapshotConv[]) {
       if (rehydrateTurn(c)) rehydratedTurns += 1;
-      if (rehydrateQueue(c)) rehydratedQueues += 1;
     }
   }
 
@@ -272,7 +263,6 @@ export function hydrateFromSnapshot(
     pruned_meta: pruned.meta,
     pruned_archived: pruned.archived,
     rehydrated_turns: rehydratedTurns,
-    rehydrated_queues: rehydratedQueues,
     stale,
   });
 }
