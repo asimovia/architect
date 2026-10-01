@@ -16,7 +16,7 @@ import { log } from '~/lib/log';
 import { parseProgress } from '~/lib/turn-progress';
 import { cleanChatText } from '~/lib/chat-sanitize';
 import { state, setState, activeClusterId,
-  setTurnProgress,
+  setTurnProgress, clearTurnProgress, clearPendingReply, clearLastDelta,
 } from './store';
 import { saveConvMeta } from './persistence';
 import { ONBOARDING_CONV_ID, type ConvMeta } from './types';
@@ -207,6 +207,40 @@ function rehydrateTurn(c: SnapshotConv): boolean {
  * The disk queue hydrates from its own endpoint (`hydrateQueue`); the
  * pending messages already show in the thread as "merges into next turn". */
 
+/**
+ * TW1 — the daemon is the truth about whether a turn is running. A conv
+ * the snapshot reports NOT live, but whose thread still ends in a
+ * streaming bubble, missed its final event (the tab was on another
+ * project, asleep, or the socket dropped): the cockpit kept showing
+ * "muse · thinking … turn 53s" for hours over a turn that had finished
+ * in six minutes (mf27, 2026-10-01). Close the bubble and the live
+ * line here; the caller reloads the thread so the real final appears.
+ * Returns the convs it settled.
+ */
+export function settleFinishedTurns(snap: ChatSnapshotResponse): string[] {
+  const settled: string[] = [];
+  for (const c of snap.convs) {
+    if (c.live) continue;
+    const msgs = state.convMap[c.conv];
+    const hasLive = !!msgs?.some((m) => m.kind === 'assistant' && m.streaming);
+    if (!hasLive && state.turnProgress[c.conv] === undefined && state.pendingReplyConvs[c.conv] === undefined) continue;
+    if (hasLive) {
+      setState('convMap', c.conv, (xs) =>
+        (xs ?? [])
+          // An empty placeholder has nothing to keep; partial text stays
+          // until the reload brings the persisted final.
+          .filter((m) => !(m.kind === 'assistant' && m.streaming && !(m.text ?? '').trim()))
+          .map((m) => (m.kind === 'assistant' && m.streaming ? { ...m, streaming: false } : m)),
+      );
+    }
+    clearTurnProgress(c.conv);
+    clearPendingReply(c.conv);
+    clearLastDelta(c.conv);
+    settled.push(c.conv);
+  }
+  return settled;
+}
+
 export interface HydrateSnapshotOpts {
   /**
    * AX7 — this payload came from the persistent boot cache
@@ -220,7 +254,7 @@ export interface HydrateSnapshotOpts {
 export function hydrateFromSnapshot(
   snap: ChatSnapshotResponse,
   opts: HydrateSnapshotOpts = {},
-): void {
+): string[] {
   const stale = !!opts.stale;
   const nextConvs: Record<string, ChatConvSummary> = {};
   const nextArchived: Record<string, true> = {};
@@ -256,6 +290,9 @@ export function hydrateFromSnapshot(
     }
   }
 
+  // TW1 — a cached payload is not the daemon's word; only a fresh one settles.
+  const settled = stale ? [] : settleFinishedTurns(snap);
+
   log.debug('chat.snapshot.v1 hydrated', {
     convs: snap.convs.length,
     live: snap.convs.filter((c) => c.live).length,
@@ -263,6 +300,8 @@ export function hydrateFromSnapshot(
     pruned_meta: pruned.meta,
     pruned_archived: pruned.archived,
     rehydrated_turns: rehydratedTurns,
+    settled_turns: settled.length,
     stale,
   });
+  return settled;
 }

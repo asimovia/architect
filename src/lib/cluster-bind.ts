@@ -36,6 +36,7 @@ import {
 import type { ChatSnapshotResponse } from '~/lib/daemon-client';
 import type { ServerSnapshot } from '~/state/server';
 import { log } from '~/lib/log';
+import { applySnapshot, startTurnWatchdog } from '~/lib/turn-watchdog';
 
 /**
  * Point every cluster-scoped store at `activeId` and rehydrate it.
@@ -171,7 +172,9 @@ export function rehydrateActiveCluster(activeId: string): void {
       return;
     }
     if (res.ok) {
-      chatStore.hydrateFromSnapshot(res.data);
+      // TW1 — settles any turn the daemon says is over and reloads its thread.
+      applySnapshot(client, res.data);
+      startTurnWatchdog();
       stageChatSnapshot(cacheKey, res.data);
       log.info('chat.snapshot.v1 hydrated', {
         convs: res.data.convs.length,
