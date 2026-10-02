@@ -24,6 +24,7 @@ import { state, setState, activeClusterId, setActiveClusterId } from './store';
 import { forgetUnreadFor } from './unread';
 import { loadConvMeta } from './persistence';
 import type { ClusterChatSlice } from './types';
+import { produce } from 'solid-js/store';
 
 const clusterSnapshots = new Map<string, ClusterChatSlice>();
 
@@ -157,11 +158,9 @@ export function recordActivity(clusterKey: string, ev: DaemonEvent): void {
 export function clearClusterChat(clusterId: string): void {
   clusterSnapshots.delete(clusterId);
   forgetUnreadFor(clusterId);
-  setState('clusterActivity', (prev) => {
-    const next = { ...prev };
-    delete next[clusterId];
-    return next;
-  });
+  // SDEL1 — a Solid store MERGES an object returned from a setter, so
+  // rebuilding without the key deleted nothing; `produce` + delete does.
+  setState('clusterActivity', produce((d) => { delete d[clusterId]; }));
   if (activeClusterId() === clusterId) {
     setState({
       convMap: {},

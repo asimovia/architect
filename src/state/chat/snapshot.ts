@@ -16,7 +16,7 @@ import { log } from '~/lib/log';
 import { parseProgress } from '~/lib/turn-progress';
 import { cleanChatText } from '~/lib/chat-sanitize';
 import { state, setState, activeClusterId,
-  setTurnProgress, clearTurnProgress, clearPendingReply, clearLastDelta,
+  setTurnProgress, clearTurnProgress, clearPendingReply, clearLastDelta, isStreamEnded,
 } from './store';
 import { saveConvMeta } from './persistence';
 import { ONBOARDING_CONV_ID, type ChatMsg, type ConvMeta } from './types';
@@ -151,6 +151,8 @@ function rehydrateTurn(c: SnapshotConv): boolean {
   const ct = c.current_turn;
   if (!ct || !c.live || !ct.stream_id) return false;
   if (ct.stream_id === c.last_final_stream_id) return false;
+  // FIN1 — this snapshot was taken before a final this tab already applied.
+  if (isStreamEnded(ct.stream_id)) return false;
   // LT-3 — seed the activity line from the snapshot. `phase` is derived
   // the same way the daemon derives it, so the two sources can't
   // disagree about a turn they both describe.

@@ -12,6 +12,7 @@ import { pickCoordinatorConv } from '~/lib/conv-state';
 import { state, setState } from './store';
 import { saveConvMeta, saveArchivedConvs, saveLastActiveConv } from './persistence';
 import { ONBOARDING_CONV_ID, isFixedAgentConv, type AgentType, type ConvMeta } from './types';
+import { produce } from 'solid-js/store';
 
 function nextAgentId(): string {
   const used = new Set(Object.values(state.convMeta).map((m) => m.agentId));
@@ -212,10 +213,9 @@ export function archiveConv(conv: string): void {
 }
 
 export function unarchiveConv(conv: string): void {
-  setState('archivedConvs', (xs) => {
-    const { [conv]: _drop, ...rest } = xs;
-    return rest;
-  });
+  // SDEL1 — a Solid store MERGES an object returned from a setter, so
+  // rebuilding without the key deleted nothing; `produce` + delete does.
+  setState('archivedConvs', produce((d) => { delete d[conv]; }));
   saveArchivedConvs();
 }
 

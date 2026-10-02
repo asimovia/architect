@@ -8,7 +8,7 @@
 
 import { isCurrentEpoch, type ClusterEpoch } from '~/lib/swap-guard';
 import type { TurnProgress } from '~/lib/turn-progress';
-import { createStore } from 'solid-js/store';
+import { createStore, produce } from 'solid-js/store';
 import { createSignal } from 'solid-js';
 import { initialChatState, type ChatStoreState } from './types';
 
@@ -27,6 +27,29 @@ export function isHydrating(): boolean {
   return hydrating;
 }
 
+/**
+ * FIN1 — streams this tab has seen END (final / error / cancel). A
+ * snapshot requested while a turn was live can land AFTER that turn's
+ * final; seeding a bubble from it resurrected a finished turn as a
+ * "Working…" bubble nothing would ever close (mf27, 2026-10-02: three
+ * stacked "Architect · STOP"). Bounded; plain module state, not reactive.
+ */
+const endedStreams = new Set<string>();
+const ENDED_CAP = 500;
+
+export function markStreamEnded(streamId: unknown): void {
+  if (typeof streamId !== 'string' || !streamId) return;
+  endedStreams.add(streamId);
+  if (endedStreams.size > ENDED_CAP) {
+    const first = endedStreams.values().next().value;
+    if (first !== undefined) endedStreams.delete(first);
+  }
+}
+
+export function isStreamEnded(streamId: string | null | undefined): boolean {
+  return !!streamId && endedStreams.has(streamId);
+}
+
 export function setHydrating(value: boolean): void {
   hydrating = value;
 }
@@ -35,19 +58,17 @@ export function setHydrating(value: boolean): void {
  *  (first chunk arrived) and dispatch (the POST failed). */
 export function clearPendingReply(conv: string): void {
   if (state.pendingReplyConvs[conv] === undefined) return;
-  setState('pendingReplyConvs', (xs) => {
-    const { [conv]: _drop, ...rest } = xs;
-    return rest;
-  });
+  // SDEL1 — a Solid store MERGES an object returned from a setter, so
+  // rebuilding without the key deleted nothing; `produce` + delete does.
+  setState('pendingReplyConvs', produce((d) => { delete d[conv]; }));
 }
 
 /** V89.2 — drop the streaming-idle marker once a turn is over. */
 export function clearLastDelta(conv: string): void {
   if (state.lastDeltaTsByConv[conv] === undefined) return;
-  setState('lastDeltaTsByConv', (xs) => {
-    const { [conv]: _drop, ...rest } = xs;
-    return rest;
-  });
+  // SDEL1 — a Solid store MERGES an object returned from a setter, so
+  // rebuilding without the key deleted nothing; `produce` + delete does.
+  setState('lastDeltaTsByConv', produce((d) => { delete d[conv]; }));
 }
 
 /** LT-3 — record the daemon's live turn progress for a conv. Dropped
@@ -62,10 +83,9 @@ export function setTurnProgress(conv: string, p: TurnProgress | null): void {
  *  `clearLastDelta` on every terminal event. */
 export function clearTurnProgress(conv: string): void {
   if (state.turnProgress[conv] === undefined) return;
-  setState('turnProgress', (xs) => {
-    const { [conv]: _drop, ...rest } = xs;
-    return rest;
-  });
+  // SDEL1 — a Solid store MERGES an object returned from a setter, so
+  // rebuilding without the key deleted nothing; `produce` + delete does.
+  setState('turnProgress', produce((d) => { delete d[conv]; }));
 }
 
 /**

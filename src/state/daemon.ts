@@ -28,7 +28,7 @@
 
 import { rememberDaemonHome } from '~/lib/daemon-home';
 import { batch } from 'solid-js';
-import { createStore } from 'solid-js/store';
+import { createStore, produce } from 'solid-js/store';
 import { DaemonClient, type HealthResponse, setDaemonVersionListener, setReauthHandler } from '~/lib/daemon-client';
 import { DaemonWS, type DaemonWSState } from '~/lib/ws';
 import { parseDaemonVersion, meetsMinimum, isDaemonAhead, isFeatureGapped, type DaemonVersion } from '~/lib/version';
@@ -439,11 +439,9 @@ function disconnectInstance(key: string): void {
   }
   try { inst.ws.close(); } catch { /* already closed */ }
   batch(() => {
-    setState('instances', (prev) => {
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
+    // SDEL1 — a Solid store MERGES an object returned from a setter, so
+    // rebuilding without the key deleted nothing; `produce` + delete does.
+    setState('instances', produce((d) => { delete d[key]; }));
     if (wasActive) {
       const fallback = Object.keys(state.instances)[0] ?? null;
       setState('activeId', fallback);

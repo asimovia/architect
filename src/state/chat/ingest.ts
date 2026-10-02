@@ -20,18 +20,7 @@ import type { DaemonClient, DaemonEvent } from '~/lib/daemon-client';
 import { log } from '~/lib/log';
 import { parseProgress } from '~/lib/turn-progress';
 import { isDelegationEvent } from '~/lib/delegation';
-import {
-  state,
-  setState,
-  activeClusterId,
-  isHydrating,
-  setHydrating,
-  clearPendingReply,
-  clearLastDelta,
-  clearTurnProgress,
-  setTurnProgress,
-  historyLoadIsCurrent,
-} from './store';
+import { state, setState, activeClusterId, isHydrating, setHydrating, clearPendingReply, clearLastDelta, clearTurnProgress, setTurnProgress, historyLoadIsCurrent, markStreamEnded } from './store';
 import { applyChatEvent, applyPatchToList } from './reducer';
 import { getOrCreateSlice, recordActivity } from './cluster-slices';
 import { noteFinishedWork } from './unread';
@@ -63,6 +52,10 @@ export function ingestEvent(ev: DaemonEvent): void {
     unarchiveConv(conv);
   }
 
+  // FIN1 — remember which turns are over, so a late snapshot can't revive them.
+  if (ev.type === 'chat.assistant.final' || ev.type === 'chat.error' || ev.type === 'chat.cancelled') {
+    markStreamEnded(ev.stream_id);
+  }
   const arr = state.convMap[conv] ?? [];
   const patch = applyChatEvent(arr, ev);
   if (patch.op === 'patch') setState('convMap', conv, patch.index, patch.fields);
@@ -132,6 +125,9 @@ export function ingestEventForCluster(clusterKey: string, ev: DaemonEvent): void
   const conv = typeof ev.conv === 'string' ? ev.conv : null;
   if (!conv) return;
   // FIN1 — a final for a project not on screen goes to its cached slice.
+  if (ev.type === 'chat.assistant.final' || ev.type === 'chat.error' || ev.type === 'chat.cancelled') {
+    markStreamEnded(ev.stream_id);
+  }
   if (ev.type === 'chat.assistant.final') {
     log.info('final filed to background project', { project: clusterKey, active: activeClusterId(), conv, stream_id: ev.stream_id ?? null });
   }

@@ -19,7 +19,7 @@
  * (the wizard's T1-hello placeholder doesn't count).
  */
 
-import { createStore } from 'solid-js/store';
+import { createStore, produce } from 'solid-js/store';
 import { createMemo, createEffect, createRoot, createSignal, untrack } from 'solid-js';
 import type { DaemonClient, ChatConvSummary, LiveTaskEntry } from '~/lib/daemon-client';
 import { chatStore } from '~/state/chat';
@@ -328,11 +328,9 @@ function beginSwitch(key: string): void {
 
 /** Drop one cluster's snapshot (used by the Forget action). */
 function clearForCluster(key: string): void {
-  setState('byCluster', (prev) => {
-    const next = { ...prev };
-    delete next[key];
-    return next;
-  });
+  // SDEL1 — a Solid store MERGES an object returned from a setter, so
+  // rebuilding without the key deleted nothing; `produce` + delete does.
+  setState('byCluster', produce((d) => { delete d[key]; }));
   const t = refreshTimers.get(key);
   if (t) { clearTimeout(t); refreshTimers.delete(key); }
   inFlight.delete(key);

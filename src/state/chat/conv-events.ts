@@ -15,6 +15,7 @@ import type { ChatConvSummary, ChatContextBlock, ChatUsageTotal, DaemonEvent } f
 import { log } from '~/lib/log';
 import { state, setState, activeClusterId } from './store';
 import { saveArchivedConvs, saveConvMeta } from './persistence';
+import { produce } from 'solid-js/store';
 
 const str = (v: unknown): string | null => (typeof v === 'string' ? v : null);
 
@@ -98,11 +99,9 @@ function onUnarchived(conv: string): void {
     archived_at: null,
     archived_by: null,
   }));
-  setState('archivedConvs', (prev) => {
-    const next = { ...prev };
-    delete next[conv];
-    return next;
-  });
+  // SDEL1 — a Solid store MERGES an object returned from a setter, so
+  // rebuilding without the key deleted nothing; `produce` + delete does.
+  setState('archivedConvs', produce((d) => { delete d[conv]; }));
   saveArchivedConvs();
 }
 
@@ -126,11 +125,9 @@ function onAnchored(conv: string, ev: DaemonEvent): void {
   }));
   // LAL9 — a fresh anchor clears the missing-anchor flag (guardrail reset).
   if (state.anchorMissing[conv] !== undefined) {
-    setState('anchorMissing', (prev) => {
-      const next = { ...prev };
-      delete next[conv];
-      return next;
-    });
+    // SDEL1 — a Solid store MERGES an object returned from a setter, so
+    // rebuilding without the key deleted nothing; `produce` + delete does.
+    setState('anchorMissing', produce((d) => { delete d[conv]; }));
   }
 }
 
@@ -187,11 +184,9 @@ function onActivity(conv: string, ev: DaemonEvent): void {
   // LAL9 — the turn is over; a stale missing-anchor flag from this
   // turn must not warn against the NEXT turn's fresh anchor.
   if (ev.live !== true && ev.coordinating !== true && state.anchorMissing[conv] !== undefined) {
-    setState('anchorMissing', (prev) => {
-      const next = { ...prev };
-      delete next[conv];
-      return next;
-    });
+    // SDEL1 — a Solid store MERGES an object returned from a setter, so
+    // rebuilding without the key deleted nothing; `produce` + delete does.
+    setState('anchorMissing', produce((d) => { delete d[conv]; }));
   }
   const activeId = activeClusterId();
   if (!activeId) return;
