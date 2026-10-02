@@ -179,6 +179,9 @@ function rehydrateTurn(c: SnapshotConv): boolean {
     (m) => m.kind === 'assistant' && m.streaming && m.stream_id === ct.stream_id,
   );
   if (!hasLive) {
+    // FIN1 — a seeded bubble is one no live event created; log it so a
+    // stack of bubbles can be traced to seeds whose finals never came.
+    log.info('live bubble seeded from snapshot', { conv: c.conv, stream_id: ct.stream_id });
     setState('convMap', c.conv, [
       ...existing,
       {

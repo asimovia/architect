@@ -173,7 +173,7 @@ export function rehydrateActiveCluster(activeId: string): void {
     }
     if (res.ok) {
       // TW1 — settles any turn the daemon says is over and reloads its thread.
-      applySnapshot(client, res.data);
+      applySnapshot(client, res.data, { reloadActive: true });
       startTurnWatchdog();
       stageChatSnapshot(cacheKey, res.data);
       log.info('chat.snapshot.v1 hydrated', {

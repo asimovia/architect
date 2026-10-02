@@ -18,13 +18,21 @@ import { log } from '~/lib/log';
 
 export const WATCH_EVERY_MS = 20_000;
 
-/** Apply a fresh snapshot and reload the threads of turns it settled. */
-export function applySnapshot(client: DaemonClient, snap: ChatSnapshotResponse): void {
+/** Apply a fresh snapshot and reload the threads of turns it settled.
+ *  `reloadActive` (a project switch-back) also re-reads the open thread:
+ *  whatever happened while the project was off screen is on disk, and the
+ *  cached copy the switch restored may predate it (FIN1). */
+export function applySnapshot(
+  client: DaemonClient,
+  snap: ChatSnapshotResponse,
+  opts: { reloadActive?: boolean } = {},
+): void {
   const settled = chatStore.hydrateFromSnapshot(snap);
-  for (const conv of settled) {
-    log.info('turn settled from the daemon snapshot', { conv });
-    if (chatStore.state.convMap[conv]) void chatStore.loadConvMessagesPage(client, conv);
-  }
+  const reload = new Set(settled.filter((conv) => chatStore.state.convMap[conv]));
+  for (const conv of settled) log.info('turn settled from the daemon snapshot', { conv });
+  const active = chatStore.state.activeConv;
+  if (opts.reloadActive && active && chatStore.state.convMap[active]) reload.add(active);
+  for (const conv of reload) void chatStore.loadConvMessagesPage(client, conv);
 }
 
 function anythingLooksLive(): boolean {

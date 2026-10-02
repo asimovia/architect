@@ -82,6 +82,18 @@ export function ingestEvent(ev: DaemonEvent): void {
     return;
   }
   if (ev.type === 'chat.assistant.final') {
+    // FIN1 — observability: every live final, and which bubble it closed.
+    // Lands in the project's debug.jsonl (src: cockpit) via the log
+    // transport, so a "stuck Working…" can be traced to a final that
+    // never arrived vs one that arrived and matched nothing.
+    if (!isHydrating()) {
+      log.info('final applied', {
+        conv,
+        stream_id: typeof ev.stream_id === 'string' ? ev.stream_id : null,
+        op: patch.op,
+        still_streaming: (state.convMap[conv] ?? []).filter((m) => m.kind === 'assistant' && m.streaming).length,
+      });
+    }
     // V86p — a final without a prior delta also drops the pending flag.
     clearPendingReply(conv);
     clearLastDelta(conv);
@@ -119,6 +131,10 @@ export function ingestEventForCluster(clusterKey: string, ev: DaemonEvent): void
   }
   const conv = typeof ev.conv === 'string' ? ev.conv : null;
   if (!conv) return;
+  // FIN1 — a final for a project not on screen goes to its cached slice.
+  if (ev.type === 'chat.assistant.final') {
+    log.info('final filed to background project', { project: clusterKey, active: activeClusterId(), conv, stream_id: ev.stream_id ?? null });
+  }
   const slice = getOrCreateSlice(clusterKey);
   const list = slice.convMap[conv] ?? [];
   const patch = applyChatEvent(list, ev);
