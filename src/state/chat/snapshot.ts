@@ -19,7 +19,7 @@ import { state, setState, activeClusterId,
   setTurnProgress, clearTurnProgress, clearPendingReply, clearLastDelta,
 } from './store';
 import { saveConvMeta } from './persistence';
-import { ONBOARDING_CONV_ID, type ConvMeta } from './types';
+import { ONBOARDING_CONV_ID, type ChatMsg, type ConvMeta } from './types';
 
 /** One brief a member session is holding, from the daemon's open-request
  *  ledger (standard §28.6, py-1.35.19). The rail shows how many there are;
@@ -219,23 +219,38 @@ function rehydrateTurn(c: SnapshotConv): boolean {
  */
 export function settleFinishedTurns(snap: ChatSnapshotResponse): string[] {
   const settled: string[] = [];
-  for (const c of snap.convs) {
-    if (c.live) continue;
+  for (const c of snap.convs as SnapshotConv[]) {
+    // TW2 — the daemon runs at most ONE turn per conv. While a conv is
+    // live, only the bubble of its current stream may stream; any other
+    // streaming bubble is a turn whose final this tab missed (mf27,
+    // 2026-10-02: Muse sends no deltas, every turn's bubble is seeded
+    // from the snapshot, and three "Architect · STOP" bubbles stacked up
+    // for one running turn).
+    const keep = c.live ? c.current_turn?.stream_id ?? null : null;
+    if (c.live && !keep) continue;
     const msgs = state.convMap[c.conv];
-    const hasLive = !!msgs?.some((m) => m.kind === 'assistant' && m.streaming);
-    if (!hasLive && state.turnProgress[c.conv] === undefined && state.pendingReplyConvs[c.conv] === undefined) continue;
-    if (hasLive) {
+    const stale = (m: ChatMsg): boolean =>
+      m.kind === 'assistant' && !!m.streaming && (keep === null || m.stream_id !== keep);
+    const hasStale = !!msgs?.some(stale);
+    if (c.live) {
+      if (!hasStale) continue;
+    } else if (!hasStale && state.turnProgress[c.conv] === undefined && state.pendingReplyConvs[c.conv] === undefined) {
+      continue;
+    }
+    if (hasStale) {
       setState('convMap', c.conv, (xs) =>
         (xs ?? [])
           // An empty placeholder has nothing to keep; partial text stays
           // until the reload brings the persisted final.
-          .filter((m) => !(m.kind === 'assistant' && m.streaming && !(m.text ?? '').trim()))
-          .map((m) => (m.kind === 'assistant' && m.streaming ? { ...m, streaming: false } : m)),
+          .filter((m) => !(stale(m) && !(m.text ?? '').trim()))
+          .map((m) => (stale(m) ? { ...m, streaming: false } : m)),
       );
     }
-    clearTurnProgress(c.conv);
-    clearPendingReply(c.conv);
-    clearLastDelta(c.conv);
+    if (!c.live) {
+      clearTurnProgress(c.conv);
+      clearPendingReply(c.conv);
+      clearLastDelta(c.conv);
+    }
     settled.push(c.conv);
   }
   return settled;
