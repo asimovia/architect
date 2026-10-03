@@ -35,10 +35,10 @@ const MAX_IMAGES = 6;
 // V83 — drop the `client` prop. Read the current DaemonClient reactively
 // from daemonStore so dispatching follows project hot-swaps without the
 // parent having to feed a fresh client down.
-// V107.41 — Standard v16 chat-turn queue. Hydrate-once-per-conv cache so
-// the composer only round-trips when it first focuses a conv. Subsequent
-// WS `queue.*` events keep the store fresh.
-const queueHydrated = new Set<string>();
+// V107.41 — Standard v16 chat-turn queue. The project::conv last hydrated,
+// so the composer round-trips once per focus; WS `queue.*` events keep the
+// store fresh in between.
+let queueHydrated = '';
 
 export default function ChatComposer(props: {
   conv: string;
@@ -64,13 +64,15 @@ export default function ChatComposer(props: {
 
   const { draft, setDraft, imgs, setImgs, docs, setDocs } = useComposerDraft(() => props.conv, grow);
 
-  // V107.41 — Hydrate queue on first focus per conv (lazy fetch).
+  // V107.41 — Hydrate queue on focus (lazy fetch). QISO1 — once per
+  // project + conv per visit: the same conv id exists in every project,
+  // and a switch-back must re-read the daemon, not trust the cached copy.
   createEffect(() => {
     const conv = props.conv;
-    if (queueHydrated.has(conv)) return;
     const c = daemonStore.state.client;
-    if (!c) return;
-    queueHydrated.add(conv);
+    const key = `${c?.transport.projectId ?? ''}::${conv}`;
+    if (!c || queueHydrated === key) return;
+    queueHydrated = key;
     void chatStore.hydrateQueue(c, conv);
   });
 

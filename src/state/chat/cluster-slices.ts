@@ -37,6 +37,8 @@ function emptySlice(): ClusterChatSlice {
     convTitleOverrides: {},
     convs: {},
     convsHydratedAt: null,
+    queues: {},
+    paging: {},
   };
 }
 
@@ -49,6 +51,8 @@ function snapshotCurrent(): ClusterChatSlice {
     convTitleOverrides: { ...state.convTitleOverrides },
     convs: { ...state.convs },
     convsHydratedAt: state.convsHydratedAt,
+    queues: { ...state.queues },
+    paging: { ...state.paging },
   };
 }
 
@@ -91,6 +95,8 @@ export function bindCluster(clusterId: string | null): void {
   // fake "Processing…" on B's master. Always reset, before either path.
   setState('pendingReplyConvs', {});
   setState('lastDeltaTsByConv', {});
+  // QISO1 — same for the live turn line; the snapshot re-seeds it.
+  setState('turnProgress', {});
   // MP5 — stamp lastReadAt so the rail's unread dot clears on visit.
   // lastEventAt stays untouched: "did anything happen since I last
   // looked" has to remain answerable.
@@ -117,6 +123,8 @@ export function bindCluster(clusterId: string | null): void {
       convsHydratedAt: cached.convsHydratedAt,
       convsStale: cached.convsHydratedAt !== null,
       anchorMissing: {},
+      queues: cached.queues,
+      paging: cached.paging,
     });
     return;
   }
@@ -133,6 +141,8 @@ export function bindCluster(clusterId: string | null): void {
     convsHydratedAt: null,
     convsStale: false,
     anchorMissing: {},
+    queues: {},
+    paging: {},
   });
   loadConvMeta();
 }

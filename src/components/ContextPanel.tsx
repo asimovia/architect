@@ -39,16 +39,17 @@ interface Props {
   moduleId?: string | null;
 }
 
-// Body cache keyed by `${rev}|${id}`. A new revision (daemon `context.changed`
+// Body cache keyed by `${project}|${rev}|${id}` (QISO1 — node ids repeat
+// across projects). A new revision (daemon `context.changed`
 // WS event) is a fresh key → fresh fetch, so expanded bodies update live.
 const bodyCache = new Map<string, string>();
 
 async function loadNodeBody(id: string, rev: number): Promise<string | null> {
-  const key = `${rev}|${id}`;
-  const cached = bodyCache.get(key);
-  if (cached !== undefined) return cached;
   const client = daemonStore.state.client;
   if (!client) return null;
+  const key = `${client.transport.projectId ?? ''}|${rev}|${id}`;
+  const cached = bodyCache.get(key);
+  if (cached !== undefined) return cached;
   const r = await client.knowledgeNode(id);
   if (!r.ok || !r.data.has_body || !r.data.body) return null;
   const body = r.data.body.trim();

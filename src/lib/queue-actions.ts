@@ -14,7 +14,8 @@
  */
 
 import { daemonStore } from '~/state/daemon';
-import { state, setState } from '~/state/chat/store';
+import { state, setState, historyLoadIsCurrent } from '~/state/chat/store';
+import { captureClusterEpoch } from '~/lib/swap-guard';
 import { log } from '~/lib/log';
 
 export async function editQueuedItem(conv: string, id: string, text: string): Promise<void> {
@@ -32,11 +33,14 @@ export async function deleteQueuedItem(conv: string, id: string): Promise<void> 
   // already-filtered list. On failure, re-hydrate to roll back.
   const prev = state.queues[conv] ?? [];
   setState('queues', conv, prev.filter((it) => it.id !== id));
+  const atCluster = captureClusterEpoch();
   const res = await c.queueDelete(conv, id);
-  if (!res.ok) {
+  // QISO1 — the rollback must not land in a project switched to meanwhile.
+  if (!res.ok && historyLoadIsCurrent(atCluster, c.transport.projectId)) {
     log.warn('queue delete failed', { id, status: res.status });
     try {
       const fresh = await c.queueList(conv);
+      if (!historyLoadIsCurrent(atCluster, c.transport.projectId)) return;
       if (fresh.ok) setState('queues', conv, fresh.data.items ?? prev);
       else setState('queues', conv, prev);
     } catch {

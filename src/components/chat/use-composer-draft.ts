@@ -14,15 +14,20 @@
  */
 
 import { createEffect, createSignal, onCleanup, type Accessor, type Setter } from 'solid-js';
+import { activeClusterId } from '~/state/chat/store';
 
 export interface PendingImg { dataURL: string; mediaType: string }
 export interface PendingDoc { filename: string; content: string }
 interface ComposerSnap { draft: string; imgs: PendingImg[]; docs: PendingDoc[] }
 
+// QISO1 — keyed by project + conv: conv ids like `_onboarding_v1` repeat
+// in every project, so a conv-only key carried text and images across.
 const composerByConv = new Map<string, ComposerSnap>();
 
-function readSnap(conv: string): ComposerSnap {
-  return composerByConv.get(conv) ?? { draft: '', imgs: [], docs: [] };
+const draftKey = (conv: string): string => `${activeClusterId() ?? ''}::${conv}`;
+
+function readSnap(key: string): ComposerSnap {
+  return composerByConv.get(key) ?? { draft: '', imgs: [], docs: [] };
 }
 
 export interface ComposerDraft {
@@ -42,32 +47,32 @@ export interface ComposerDraft {
 export function useComposerDraft(conv: Accessor<string>, afterSwap: () => void): ComposerDraft {
   // Seed from this conv's snapshot on first mount so a returning
   // operator sees their draft immediately, not a flash of empty.
-  const initial = readSnap(conv());
+  const initial = readSnap(draftKey(conv()));
   const [draft, setDraft] = createSignal(initial.draft);
   const [imgs, setImgs] = createSignal<PendingImg[]>(initial.imgs);
   const [docs, setDocs] = createSignal<PendingDoc[]>(initial.docs);
 
-  // The slug whose draft is in the signals right now. `conv()` has
+  // The project::slug whose draft is in the signals right now. `conv()` has
   // already advanced by the time the effect below fires, so the
   // outgoing state has to be filed under this, not under `conv()`.
-  let currentConv = conv();
+  let currentKey = draftKey(conv());
 
   const stash = (): void => {
     const out: ComposerSnap = { draft: draft(), imgs: imgs(), docs: docs() };
     // Only persist non-empty so the map stays small.
-    if (out.draft || out.imgs.length || out.docs.length) composerByConv.set(currentConv, out);
-    else composerByConv.delete(currentConv);
+    if (out.draft || out.imgs.length || out.docs.length) composerByConv.set(currentKey, out);
+    else composerByConv.delete(currentKey);
   };
 
   createEffect(() => {
-    const next = conv();
-    if (next === currentConv) return;
+    const next = draftKey(conv());
+    if (next === currentKey) return;
     stash();
     const snap = readSnap(next);
     setDraft(snap.draft);
     setImgs(snap.imgs);
     setDocs(snap.docs);
-    currentConv = next;
+    currentKey = next;
     queueMicrotask(afterSwap);
   });
 

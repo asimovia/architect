@@ -8,7 +8,8 @@
 
 import type { ChatQueueItem, DaemonClient, DaemonEvent } from '~/lib/daemon-client';
 import { log } from '~/lib/log';
-import { state, setState, activeClusterId } from './store';
+import { captureClusterEpoch } from '~/lib/swap-guard';
+import { state, setState, historyLoadIsCurrent } from './store';
 
 export function ingestQueueEvent(ev: DaemonEvent): void {
   const conv = typeof ev.conv === 'string' ? ev.conv : '';
@@ -46,12 +47,15 @@ export function ingestQueueEvent(ev: DaemonEvent): void {
  * into project B.
  */
 export async function hydrateQueue(client: DaemonClient, conv: string): Promise<void> {
-  const atCluster = activeClusterId();
+  // QISO1 — also refuse a client that still belongs to the previous
+  // project (mid-switch), and an A → B → A round trip.
+  const atCluster = captureClusterEpoch();
+  if (!historyLoadIsCurrent(atCluster, client.transport.projectId)) return;
   try {
     const res = await client.queueList(conv);
     if (!res.ok) return;
-    if (activeClusterId() !== atCluster) {
-      log.debug('[swap-guard] dropping stale queue hydrate', { conv, from: atCluster });
+    if (!historyLoadIsCurrent(atCluster, client.transport.projectId)) {
+      log.info('[swap-guard] dropping stale queue hydrate', { conv, client: client.transport.projectId });
       return;
     }
     setState('queues', conv, res.data.items ?? []);

@@ -181,6 +181,10 @@ export interface ClusterChatSlice {
   convTitleOverrides: Record<string, string>;
   convs: Record<string, ChatConvSummary>;
   convsHydratedAt: string | null;
+  /** QISO1 — conv ids (`_onboarding_v1`) repeat in every project, so
+   *  anything keyed by conv alone must travel with its project. */
+  queues: Record<string, ChatQueueItem[]>;
+  paging: Record<string, ChatPaging>;
 }
 
 export const initialChatState: ChatStoreState = {
