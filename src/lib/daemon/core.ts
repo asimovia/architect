@@ -38,6 +38,9 @@ import type { Result, TextResult } from './result';
 /** V108 — hard bound on EVERY request; a stalled TLS handshake or a
  *  saturated per-host pool used to hang the boot scan forever. */
 const REQUEST_TIMEOUT_MS = 15000;
+// PICK1 — routes that legitimately wait on the operator (a native dialog
+// stays open while they browse). The daemon gives up at 600 s.
+const SLOW_ROUTE_TIMEOUT_MS: Record<string, number> = { '/fs/pick-folder': 610_000 };
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -136,7 +139,7 @@ export class DaemonCore {
     if (this.transport.projectId) {
       headers['x-meshkore-project'] = this.transport.projectId;
     }
-    const timeoutSignal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+    const timeoutSignal = AbortSignal.timeout(SLOW_ROUTE_TIMEOUT_MS[path] ?? REQUEST_TIMEOUT_MS);
     const effectiveSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
     let res: Response;
     try {

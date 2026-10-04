@@ -23,6 +23,9 @@ export type ModalProps = {
    *  header ✕ — the ONLY way out is a footer button (Cancel / Create).
    *  For forms with unsaved operator text (e.g. NewMemberDialog). */
   persistent?: boolean;
+  /** MOD1 — keep the header ✕ and the footer, but ignore backdrop clicks
+   *  and Escape. For multi-step flows the operator closes on purpose. */
+  closeOnlyExplicitly?: boolean;
   zIndex?: number;
   children?: JSX.Element;
   bodyRef?: (el: HTMLDivElement) => void;
@@ -42,7 +45,7 @@ function btnCls(b: ModalButton): string {
 
 export function Modal(props: ModalProps): JSX.Element {
   createEffect(() => {
-    if (!props.isOpen || props.persistent) return;
+    if (!props.isOpen || props.persistent || props.closeOnlyExplicitly) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') props.onClose(null);
     };
@@ -50,9 +53,16 @@ export function Modal(props: ModalProps): JSX.Element {
     onCleanup(() => document.removeEventListener('keydown', onKey));
   });
 
+  // MOD1 — a click counts only if it also STARTED on the backdrop. Selecting
+  // text in a field and releasing past the dialog's edge fires a click on
+  // the backdrop and used to close the modal mid-edit.
+  let pressedOnBackdrop = false;
+  const onBackdropDown = (e: MouseEvent) => { pressedOnBackdrop = e.target === e.currentTarget; };
   const onBackdropClick = (e: MouseEvent) => {
-    if (props.floating || props.persistent) return;
-    if (e.target === e.currentTarget) props.onClose(null);
+    const started = pressedOnBackdrop;
+    pressedOnBackdrop = false;
+    if (props.floating || props.persistent || props.closeOnlyExplicitly) return;
+    if (started && e.target === e.currentTarget) props.onClose(null);
   };
 
   return (
@@ -66,6 +76,7 @@ export function Modal(props: ModalProps): JSX.Element {
           }
           /* dynamic: callers can stack modals via props.zIndex */
           style={{ 'z-index': String(props.zIndex ?? 50) }}
+          onMouseDown={onBackdropDown}
           onClick={onBackdropClick}
         >
           <div class="w-full max-w-2xl max-h-[90vh] bg-[#0b1220] border border-gray-700/40 rounded-2xl shadow-2xl grid grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden pointer-events-auto">

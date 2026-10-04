@@ -157,6 +157,13 @@ export class ConfigMethods extends SystemMethods {
     return this.request<RemoteTokenResponse>('POST', '/remote/token/rotate', {}, signal);
   }
 
+  /** PICK1 — POST /fs/pick-folder: the daemon opens the OS folder dialog
+   *  on its machine. 200 {path} | {cancelled}; 501 on a headless host;
+   *  409 while another dialog is open. Feature `fs.pick-folder.v1`. */
+  async pickFolder(prompt: string, start?: string, signal?: AbortSignal): Promise<Result<{ path?: string; cancelled?: boolean }>> {
+    return this.request<{ path?: string; cancelled?: boolean }>('POST', '/fs/pick-folder', { prompt, start }, signal);
+  }
+
   /** DELETE /remote/token — destroy the remote token. Remote callers 401
    *  immediately (the personal agent loses access to ALL projects) until a
    *  new one is minted via rotate. */

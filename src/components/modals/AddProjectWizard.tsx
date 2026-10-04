@@ -91,13 +91,16 @@ function AddProjectWizard(props: { onClose: () => void }) {
 
   const buttons = (): ModalButton[] => {
     const s = step();
-    if (s === 'NAME') return [{ id: 'continue', label: 'Continue →', primary: true }];
+    // MOD1 — the wizard closes only on purpose: Cancel on every step.
+    const cancel: ModalButton = { id: 'cancel', label: 'Cancel' };
+    if (s === 'NAME') return [cancel, { id: 'continue', label: 'Continue →', primary: true }];
     if (s === 'PATH') return [
+      cancel,
       { id: 'skip', label: 'Skip — let the agent ask' },
       { id: 'continue', label: 'Continue →', primary: true },
     ];
     if (s === 'PROMPT') return [{ id: 'close', label: daemonLive() ? 'Close' : 'Close — keep scanning' }];
-    return [];
+    return [cancel];
   };
 
   const onModalClose = (id: string | null) => {
@@ -112,7 +115,7 @@ function AddProjectWizard(props: { onClose: () => void }) {
   };
 
   return (
-    <Modal isOpen={true} onClose={onModalClose} title="Add a project" zIndex={55} buttons={buttons()}>
+    <Modal isOpen={true} onClose={onModalClose} title="Add a project" zIndex={55} buttons={buttons()} closeOnlyExplicitly>
       <div class="min-h-[280px] flex flex-col">
         <Show when={history().length > 0}>
           <button
