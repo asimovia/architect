@@ -10081,15 +10081,21 @@ def _pick_command(prompt: str, start: Optional[str]) -> Optional[List[str]]:
         loc = f" default location (POSIX file {_osa_quote(start)})" if start else ""
         return [
             "osascript",
-            "-e", "activate",
-            "-e", f"POSIX path of (choose folder with prompt {_osa_quote(prompt)}{loc})",
+            "-e",
+            "activate",
+            "-e",
+            f"POSIX path of (choose folder with prompt {_osa_quote(prompt)}{loc})",
         ]
     if sys.platform.startswith("win"):
         script = (
             "Add-Type -AssemblyName System.Windows.Forms;"
             "$d=New-Object System.Windows.Forms.FolderBrowserDialog;"
             f"$d.Description='{prompt.replace(chr(39), chr(39) * 2)}';"
-            + (f"$d.SelectedPath='{start.replace(chr(39), chr(39) * 2)}';" if start else "")
+            + (
+                f"$d.SelectedPath='{start.replace(chr(39), chr(39) * 2)}';"
+                if start
+                else ""
+            )
             + "if($d.ShowDialog() -eq 'OK'){Write-Output $d.SelectedPath}"
         )
         return ["powershell", "-NoProfile", "-STA", "-Command", script]
@@ -10101,7 +10107,13 @@ def _pick_command(prompt: str, start: Optional[str]) -> Optional[List[str]]:
             cmd.append(f"--filename={start.rstrip('/')}/")
         return cmd
     if shutil.which("kdialog"):
-        return ["kdialog", "--getexistingdirectory", start or os.path.expanduser("~"), "--title", prompt]
+        return [
+            "kdialog",
+            "--getexistingdirectory",
+            start or os.path.expanduser("~"),
+            "--title",
+            prompt,
+        ]
     return None
 
 
@@ -10119,11 +10131,16 @@ def pick_folder_http(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
     if not _pick_lock.acquire(blocking=False):
         return 409, {"error": "a folder dialog is already open", "code": "busy"}
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=_PICK_TIMEOUT_S)
+        proc = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=_PICK_TIMEOUT_S
+        )
     except subprocess.TimeoutExpired:
         return 200, {"cancelled": True, "reason": "timeout"}
     except OSError as e:
-        return 501, {"error": f"folder dialog failed to start: {e}", "code": "no_dialog"}
+        return 501, {
+            "error": f"folder dialog failed to start: {e}",
+            "code": "no_dialog",
+        }
     finally:
         _pick_lock.release()
     path = proc.stdout.strip()
