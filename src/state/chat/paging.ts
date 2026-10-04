@@ -1,10 +1,9 @@
 /**
  * state/chat/paging.ts — the windowed history loader.
  *
- * A long-lived conv has hundreds of persisted messages. The UI renders a
- * sliding window: INITIAL_PAGE on focus, +PAGE per scroll-up, hard-capped
- * at UI_MESSAGE_CAP. The daemon keeps everything; we just don't paint
- * past the cap.
+ * A long-lived conv has hundreds of persisted messages. The UI loads the
+ * newest INITIAL_PAGE on focus and +PAGE per scroll-up, all the way to the
+ * first message (PAGE1); everything loaded stays in memory.
  *
  * The first-page loader lives in `ingest.ts` — it replays history through
  * the same reducer that powers live streaming.
@@ -17,35 +16,7 @@ import { state, setState, historyLoadIsCurrent } from './store';
 import { historyMsg } from './history-msg';
 import { applyChatEvent, applyPatchToList, mergeDelegationCards } from './reducer';
 import { isDelegationEvent } from '~/lib/delegation';
-import { PAGE, UI_MESSAGE_CAP, type ChatMsg } from './types';
-
-function listLen(conv: string): number {
-  return (state.convMap[conv] ?? []).length;
-}
-
-/**
- * Trim a conv's rendered window to the newest UI_MESSAGE_CAP messages.
- * Called after a LIVE final appends.
- *
- * A-CONVWINDOW-01 — this must NOT set `paging.capped`: it trims the
- * OLDEST messages, which are still on disk, so it is not a pagination
- * boundary. Marking capped here made scroll-up permanently refuse to
- * refetch messages that exist. The trimmed tail's oldest ts becomes the
- * new scroll-up cursor.
- */
-export function capConvWindow(conv: string): void {
-  const list = state.convMap[conv] ?? [];
-  if (list.length <= UI_MESSAGE_CAP) return;
-  const next = list.slice(list.length - UI_MESSAGE_CAP);
-  setState('convMap', conv, next);
-  const p = state.paging[conv];
-  if (p) {
-    setState('paging', conv, {
-      hasMore: true,
-      oldestTs: next[0]?.ts ?? p.oldestTs,
-    });
-  }
-}
+import { PAGE, type ChatMsg } from './types';
 
 /** Record the pagination cursor after the first page landed. */
 export function setInitialPaging(conv: string, hasMore: boolean, fallbackOldestTs: string): void {
@@ -55,14 +26,12 @@ export function setInitialPaging(conv: string, hasMore: boolean, fallbackOldestT
     hasMore,
     oldestTs: oldest,
     loading: false,
-    capped: list.length >= UI_MESSAGE_CAP,
   });
 }
 
 /**
  * Load the next older PAGE for `conv` and PREPEND it. No-ops when there
- * is no more history, a fetch is already in flight, or the UI cap is
- * reached. Returns how many messages were prepended so the caller can
+ * is no more history or a fetch is already in flight. Returns how many messages were prepended so the caller can
  * preserve scroll position.
  *
  * The older page is built by hand rather than replayed through the
@@ -72,10 +41,6 @@ export function setInitialPaging(conv: string, hasMore: boolean, fallbackOldestT
 export async function loadEarlierMessages(client: DaemonClient, conv: string): Promise<number> {
   const p = state.paging[conv];
   if (!p || !p.hasMore || p.loading) return 0;
-  if (listLen(conv) >= UI_MESSAGE_CAP) {
-    setState('paging', conv, 'capped', true);
-    return 0;
-  }
   const atCluster = captureClusterEpoch();
   if (!historyLoadIsCurrent(atCluster, client.transport.projectId)) return 0;
   setState('paging', conv, 'loading', true);
@@ -102,20 +67,12 @@ export async function loadEarlierMessages(client: DaemonClient, conv: string): P
     const m = historyMsg(e);
     if (m) older.push(m);
   }
-  const merged = mergeDelegationCards(older, state.convMap[conv] ?? []);
-  // Respect the UI cap: keep the NEWEST UI_MESSAGE_CAP and stop loading.
-  let next = merged;
-  let capped = false;
-  if (merged.length > UI_MESSAGE_CAP) {
-    next = merged.slice(merged.length - UI_MESSAGE_CAP);
-    capped = true;
-  }
+  const next = mergeDelegationCards(older, state.convMap[conv] ?? []);
   setState('convMap', conv, next);
   setState('paging', conv, {
-    hasMore: !!res.data.has_more && !capped,
+    hasMore: !!res.data.has_more,
     oldestTs: next[0] ? (next[0].ts ?? '') : p.oldestTs,
     loading: false,
-    capped,
   });
   return older.length;
 }

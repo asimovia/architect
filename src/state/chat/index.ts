@@ -66,7 +66,6 @@ export {
   ONBOARDING_CONV_ID,
   INITIAL_PAGE,
   PAGE,
-  UI_MESSAGE_CAP,
   isFixedAgentConv,
   agentTypeFromSlug,
 } from './types';

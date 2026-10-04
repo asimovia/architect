@@ -25,7 +25,8 @@ import { applyChatEvent, applyPatchToList } from './reducer';
 import { getOrCreateSlice, recordActivity } from './cluster-slices';
 import { noteFinishedWork } from './unread';
 import { unarchiveConv } from './conv-actions';
-import { capConvWindow, setInitialPaging } from './paging';
+import { setInitialPaging } from './paging';
+import { INITIAL_PAGE } from './types';
 
 const LIVE_TEXT_EVENTS = new Set<string>([
   'chat.user',
@@ -92,10 +93,6 @@ export function ingestEvent(ev: DaemonEvent): void {
     clearLastDelta(conv);
     // LT-3 — the turn is over; stop describing what it was doing.
     clearTurnProgress(conv);
-    // 2026-06-12 — windowed-history cap after a LIVE final appends, so a
-    // long session doesn't balloon the DOM. Never while hydrating (the
-    // initial page is already ≤ INITIAL_PAGE).
-    if (!isHydrating()) capConvWindow(conv);
     return;
   }
   if (ev.type === 'chat.cancelled' || ev.type === 'chat.error') {
@@ -155,7 +152,9 @@ export async function loadConvMessagesPage(
     log.warn('[swap-guard] history load with another project\'s client — skipped', { conv, client: client.transport.projectId, active: atCluster.key });
     return { has_more: false, oldest_ts: '' };
   }
-  const res = await client.chatConvMessages(conv, opts);
+  // PAGE1 — a reload (switch-back, watchdog) passed no limit and got the
+  // daemon's default of 200 messages; every first page is INITIAL_PAGE.
+  const res = await client.chatConvMessages(conv, { ...opts, limit: opts.limit ?? INITIAL_PAGE });
   if (!historyLoadIsCurrent(atCluster, client.transport.projectId)) {
     log.warn('[swap-guard] project switched while loading history — dropped', { conv, from: atCluster.key });
     return { has_more: false, oldest_ts: '' };

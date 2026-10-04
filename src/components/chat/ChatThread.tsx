@@ -90,7 +90,7 @@ export default function ChatThread(props: {
     // messages on focus (was 200). A long conv has hundreds of
     // persisted turns; rendering them all froze the panel + scrolled
     // from the top. The scroll-up handler below loads older pages on
-    // demand, hard-capped at UI_MESSAGE_CAP.
+    // demand, up to the first message (PAGE1).
     void chatStore.loadConvMessagesPage(client, conv, { limit: INITIAL_PAGE }).finally(() => {
       setLoadingConvs((s) => { const n = new Set(s); n.delete(conv); return n; });
     });
@@ -144,7 +144,7 @@ export default function ChatThread(props: {
   // scrolls within SCROLL_TRIGGER_PX of the top AND there are older
   // pages, fetch the next PAGE and prepend it — preserving the visual
   // scroll position so the viewport doesn't jump (anchor on the
-  // scrollHeight delta). Stops at UI_MESSAGE_CAP (paging.capped).
+  // scrollHeight delta). Runs until the first message (PAGE1).
   let scrollEl: HTMLDivElement | undefined;
   const SCROLL_TRIGGER_PX = 80;
   const paging = () => {
@@ -157,7 +157,7 @@ export default function ChatThread(props: {
     const conv = chatStore.state.activeConv;
     const client = daemonStore.state.client;
     const p = paging();
-    if (!conv || !client || !p || !p.hasMore || p.loading || p.capped) return;
+    if (!conv || !client || !p || !p.hasMore || p.loading) return;
     const prevHeight = scrollEl.scrollHeight;
     const prevTop = scrollEl.scrollTop;
     void chatStore.loadEarlierMessages(client, conv).then((added) => {
@@ -189,19 +189,12 @@ export default function ChatThread(props: {
       <Show when={showLoader()}>
         <ChatLoadingPlaceholder />
       </Show>
-      {/* 2026-06-12 — windowed history affordances at the top of the
-          thread. While an older page loads: a spinner. When the UI
-          cap is hit: a thin notice (the history isn't deleted — just
-          not painted past UI_MESSAGE_CAP to keep the panel snappy). */}
+      {/* Windowed history at the top of the thread: a spinner while an
+          older page loads. */}
       <Show when={paging()?.loading}>
         <div class="flex items-center justify-center gap-2 py-2 text-[11px] text-gray-500">
           <span class="inline-block w-3 h-3 rounded-full border-2 border-gray-600 border-t-gray-300 animate-spin" />
           Loading earlier messages…
-        </div>
-      </Show>
-      <Show when={paging()?.capped && !paging()?.loading}>
-        <div class="text-center py-2 text-[11px] text-gray-600">
-          — showing the latest messages · full history remains on the daemon —
         </div>
       </Show>
       <Show

@@ -117,7 +117,17 @@ export function applyChatEvent(list: readonly ChatMsg[], ev: DaemonEvent): ChatE
       // later message above it as "queued". A final ENDS the conv's turn and
       // the daemon never runs two turns on one conv, so any other bubble
       // still streaming here is stale: drop it if empty, close it if not.
-      const stale = list.some((m, i) => i !== idx && m.kind === 'assistant' && m.streaming);
+      // LIVE1 (mf27, 2026-10-04) — only a bubble that started BEFORE this
+      // final can belong to the turn it ends. Reopening a thread replays the
+      // history's old finals on top of the current turn's seeded bubble
+      // (empty under Muse); without this check the first old final swept it
+      // and the running turn vanished from the wall.
+      const finalMs = Date.parse(strOrUndef(ev.ts) ?? '');
+      const endedBy = (m: ChatMsg): boolean => {
+        const startMs = Date.parse(m.ts ?? '');
+        return Number.isNaN(finalMs) || Number.isNaN(startMs) || startMs <= finalMs;
+      };
+      const stale = list.some((m, i) => i !== idx && m.kind === 'assistant' && m.streaming && endedBy(m));
       if (!stale) {
         if (idx >= 0) return { op: 'patch', index: idx, fields: { text: cleaned, streaming: false } };
         return {
@@ -138,7 +148,7 @@ export function applyChatEvent(list: readonly ChatMsg[], ev: DaemonEvent): ChatE
           swept.push({ ...m, text: cleaned, streaming: false });
           return;
         }
-        if (m.kind === 'assistant' && m.streaming) {
+        if (m.kind === 'assistant' && m.streaming && endedBy(m)) {
           if (m.text.trim()) swept.push({ ...m, streaming: false });
           return;
         }

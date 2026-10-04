@@ -54,4 +54,18 @@ describe('a final ends the turn (reddit 2026-09-27)', () => {
     }));
     assert.deepEqual(after.map((m) => [m.text, !!m.streaming]), [['half an answer', false], ['done', false]]);
   });
+
+  it('LIVE1 — replaying an older final keeps the running turn (mf27 2026-10-04)', () => {
+    // Reopening the thread: the live Muse bubble (no text yet) was seeded
+    // from the snapshot, then the history's earlier finals replay.
+    const list: ChatMsg[] = [
+      { kind: 'assistant', text: '', streaming: true, stream_id: 's_live', ts: '2026-10-04T10:12:17Z' },
+    ];
+    const after = applyPatchToList(list, applyChatEvent(list, {
+      type: 'chat.assistant.final', conv: 'c', stream_id: 's_old', text: 'earlier answer', ts: '2026-10-04T09:58:00Z',
+    }));
+    const live = after.find((m) => m.stream_id === 's_live');
+    assert.ok(live?.streaming, 'the running turn must survive an older final');
+    assert.equal(after.find((m) => m.stream_id === 's_old')?.streaming, false);
+  });
 });

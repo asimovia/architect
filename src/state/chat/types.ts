@@ -113,9 +113,6 @@ export interface ChatPaging {
   oldestTs: string;
   /** A page fetch is in flight (prevents double-trigger on scroll). */
   loading: boolean;
-  /** UI cap reached: even if `hasMore`, we stop loading to protect the
-   *  render + memory. The history still exists on disk. */
-  capped: boolean;
 }
 
 export interface ChatStoreState {
@@ -208,14 +205,10 @@ export const initialChatState: ChatStoreState = {
 // 2026-06-12 — windowed history loader knobs.
 //   INITIAL_PAGE — messages loaded when a conv gains focus / on reload.
 //   PAGE         — messages loaded per scroll-up step.
-//   UI_MESSAGE_CAP — hard ceiling on rendered messages per conv. Past
-//                    this we stop loading older pages AND trim the
-//                    oldest as live finals append, so a long session
-//                    never balloons the DOM. The daemon keeps the full
-//                    history; the operator just can't scroll past it.
+// PAGE1 (2026-10-04) — no ceiling: scrolling up keeps loading until the
+// conversation's first message, and what is loaded stays in memory.
 export const INITIAL_PAGE = 20;
-export const PAGE = 20;
-export const UI_MESSAGE_CAP = 100;
+export const PAGE = 10;
 
 /**
  * V107.8 — Infer agent_type from the conv slug pattern.
