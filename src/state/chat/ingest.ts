@@ -114,7 +114,11 @@ export function ingestEventForCluster(clusterKey: string, ev: DaemonEvent): void
   // MP5 — record activity regardless, so the rail's working slug and
   // unread dot react to background daemons too.
   recordActivity(clusterKey, ev);
-  noteFinishedWork(clusterKey, ev);
+  const evConv = typeof ev.conv === 'string' ? ev.conv : '';
+  const summary = activeClusterId() === clusterKey
+    ? state.convs[evConv]
+    : getOrCreateSlice(clusterKey).convs[evConv];
+  noteFinishedWork(clusterKey, ev, summary);
   if (activeClusterId() === clusterKey) {
     ingestEvent(ev);
     return;

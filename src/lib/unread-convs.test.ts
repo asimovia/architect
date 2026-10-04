@@ -4,6 +4,7 @@ import {
   UNREAD_KEY,
   dropCluster,
   isFinishedWork,
+  isReadableConv,
   loadUnread,
   markRead,
   markUnread,
@@ -56,4 +57,11 @@ test('persistence survives a reload and ignores garbage', () => {
   assert.deepEqual(loadUnread(kv), { q: ['a02'] });
   kv.setItem(UNREAD_KEY, 'not json');
   assert.deepEqual(loadUnread(kv), {});
+});
+
+test('DOT1 — background external asks and finished children never light the dot (MeshKore 2026-10-04)', () => {
+  assert.equal(isReadableConv('ext-consultant-ext-site-devto-4792828'), false);
+  assert.equal(isReadableConv('mb-developer-b2cf', { parent_conv: '_onboarding_v1' }), false);
+  assert.equal(isReadableConv('_onboarding_v1', { parent_conv: 'roadmap-architect-e2n8m' }), true);
+  assert.equal(isReadableConv('roadmap-architect-e2n8m'), true);
 });

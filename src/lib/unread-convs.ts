@@ -26,6 +26,23 @@ export function isFinishedWork(evType: string, reason?: unknown): boolean {
   return evType === 'chat.error' && reason !== 'become';
 }
 
+/**
+ * DOT1 (2026-10-04) — only work the operator can open lights the dot.
+ * External asks to the public consultant (`ext-<member>-…`) run in the
+ * background and never appear on the rail, and a delegated child leaves the
+ * rail when done (its report wakes the parent, whose final lights the dot).
+ * Counting them kept MeshKore's dot on for good.
+ */
+// The master conv is never a child (rail-tree.ts), even when it carries a
+// `parent_conv` from an Orchestrator brief.
+const MASTER_CONV = '_onboarding_v1';
+
+export function isReadableConv(conv: string, summary?: { parent_conv?: string | null } | null): boolean {
+  if (conv === MASTER_CONV) return true;
+  if (conv.startsWith('ext-')) return false;
+  return !summary?.parent_conv;
+}
+
 export function markUnread(map: UnreadMap, cluster: string, conv: string): UnreadMap {
   const cur = map[cluster] ?? [];
   if (cur.includes(conv)) return map;

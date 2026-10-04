@@ -13,6 +13,7 @@ import { createEffect, createRoot, createSignal } from 'solid-js';
 import {
   dropCluster,
   isFinishedWork,
+  isReadableConv,
   loadUnread,
   markRead,
   markUnread,
@@ -55,9 +56,14 @@ createRoot(() => {
 });
 
 /** Called for every live event of every project (see ingestEventForCluster). */
-export function noteFinishedWork(cluster: string, ev: DaemonEvent): void {
+export function noteFinishedWork(
+  cluster: string,
+  ev: DaemonEvent,
+  summary?: { parent_conv?: string | null } | null,
+): void {
   const conv = typeof ev.conv === 'string' ? ev.conv : '';
   if (!conv || !isFinishedWork(String(ev.type ?? ''), ev.reason)) return;
+  if (!isReadableConv(conv, summary)) return;
   const w = watching();
   if (w && w[0] === cluster && w[1] === conv) return;
   setUnread(markUnread(unread(), cluster, conv));
@@ -73,9 +79,10 @@ export function isConvUnread(conv: string): boolean {
 /** Unread convs of a project, minus the archived ones when it is the active
  *  project (an archived agent is off the rail, so its dot would be a ghost). */
 export function unreadCountFor(cluster: string): number {
-  const convs = unread()[cluster] ?? [];
+  // DOT1 — entries stored before the rule existed must not keep the dot on.
+  const convs = (unread()[cluster] ?? []).filter((c) => isReadableConv(c));
   if (cluster !== activeClusterId()) return convs.length;
-  return convs.filter((c) => !state.archivedConvs[c]).length;
+  return convs.filter((c) => !state.archivedConvs[c] && isReadableConv(c, state.convs[c])).length;
 }
 
 export function markConvRead(cluster: string | null, conv: string): void {
