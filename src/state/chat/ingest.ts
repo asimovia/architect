@@ -20,13 +20,13 @@ import type { DaemonClient, DaemonEvent } from '~/lib/daemon-client';
 import { log } from '~/lib/log';
 import { parseProgress } from '~/lib/turn-progress';
 import { isDelegationEvent } from '~/lib/delegation';
-import { state, setState, activeClusterId, isHydrating, setHydrating, clearPendingReply, clearLastDelta, clearTurnProgress, setTurnProgress, historyLoadIsCurrent, markStreamEnded } from './store';
-import { applyChatEvent, applyPatchToList } from './reducer';
+import { state, setState, activeClusterId, isHydrating, setHydrating, clearPendingReply, clearLastDelta, clearTurnProgress, setTurnProgress, historyLoadIsCurrent, markStreamEnded, isStreamEnded } from './store';
+import { applyChatEvent, applyPatchToList, restoreLiveTail } from './reducer';
 import { getOrCreateSlice, recordActivity } from './cluster-slices';
 import { noteFinishedWork } from './unread';
 import { unarchiveConv } from './conv-actions';
 import { setInitialPaging } from './paging';
-import { INITIAL_PAGE } from './types';
+import { INITIAL_PAGE, type ChatMsg } from './types';
 
 const LIVE_TEXT_EVENTS = new Set<string>([
   'chat.user',
@@ -172,11 +172,17 @@ export async function loadConvMessagesPage(
   // (A-CONVWINDOW-01). Wiping it dropped a live message when a WS delta
   // beat the history load on a fresh refresh. buildStream re-sorts by ts
   // and extracts `live` separately, so keeping the tail here is safe.
+  // LIVE2 (mf27, 2026-10-14) — the tail is set aside during the replay and
+  // put back by its start time. Kept at the FRONT, it sat before the whole
+  // page: every operator message after it read as "queued · merges into
+  // next turn" (six answered messages stacked in yellow), and each old
+  // ending in the page could close it.
+  let liveTail: ChatMsg[] = [];
   if (!opts.before) {
-    const liveTail = (state.convMap[conv] ?? []).filter(
+    liveTail = (state.convMap[conv] ?? []).filter(
       (m) => m.kind === 'assistant' && m.streaming,
     );
-    setState('convMap', conv, liveTail);
+    setState('convMap', conv, []);
   }
   setHydrating(true);
   try {
@@ -203,6 +209,7 @@ export async function loadConvMessagesPage(
   } finally {
     setHydrating(false);
   }
+  if (liveTail.length) setState('convMap', conv, restoreLiveTail(state.convMap[conv] ?? [], liveTail, isStreamEnded));
   setInitialPaging(conv, !!res.data.has_more, res.data.oldest_ts ?? '');
   return { has_more: res.data.has_more, oldest_ts: res.data.oldest_ts };
 }

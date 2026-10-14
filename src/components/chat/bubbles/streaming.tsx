@@ -36,7 +36,6 @@ import { colorizeInlineCodeInHtml } from '~/lib/code-colorize';
  */
 const STREAM_TAIL_HEIGHT_PX = 112;
 const VERB_ROTATE_MS = 1800;
-const IDLE_HINT_MS = 1500;
 
 const THINKING_VERBS = [
   'Thinking',
@@ -165,36 +164,32 @@ function Dots(props: { size: string }) {
 }
 
 /**
- * V89.2 — shown UNDER a streaming bubble that has partial text but has
- * received nothing for >1.5 s, so the operator never stares at frozen
- * text while the agent is mid tool-call. Disappears the instant another
- * delta lands (the store's last-delta stamp bumps).
+ * The activity line UNDER a streaming bubble that already has text.
+ *
+ * LIVE2 (mf27, 2026-10-14) — it used to appear only after the cockpit had
+ * itself seen a delta go quiet for 1.5 s. After a reload or a switch-back
+ * there is no such stamp, so a turn running a 15-minute job showed its old
+ * text and nothing else: no loader, no times, no way to tell it was alive.
+ * The operator's rule: while something works, the bottom of the thread
+ * always says what it is doing and for how long.
  */
 export function StreamingIdleHint(props: { conv: string }) {
-  const [nowMs, setNowMs] = createSignal(Date.now());
   const verb = useRotatingVerb();
-  onMount(() => {
-    // Own 500 ms wall-clock so the threshold check stays reactive
-    // without a global ticker.
-    const tick = setInterval(() => setNowMs(Date.now()), 500);
-    onCleanup(() => clearInterval(tick));
-  });
-  const idleMs = (): number => {
-    const last = chatStore.state.lastDeltaTsByConv[props.conv];
-    if (typeof last !== 'number') return 0;
-    return nowMs() - last;
-  };
   const line = useProgressLine(() => props.conv);
   const longWork = useLongWork(() => props.conv);
+  const summary = useWorkSummary(() => props.conv);
   return (
-    <Show when={idleMs() > IDLE_HINT_MS}>
-      <div class="flex items-center gap-2 text-emerald-300/70 italic text-[12px] mt-1.5 min-w-0">
+    <div class="flex flex-col gap-0.5 mt-1.5 min-w-0">
+      <div class="flex items-center gap-2 text-emerald-300/80 italic text-[12px] min-w-0">
         <Dots size="w-1 h-1" />
         <Show when={line()} fallback={<span>{verb()}…</span>}>
           {(l) => <ActivityLine label={l()} longWork={longWork()} />}
         </Show>
       </div>
-    </Show>
+      <Show when={summary()}>
+        {(t) => <span class="pl-[14px] font-mono text-[11px] text-gray-500 truncate">{t()}</span>}
+      </Show>
+    </div>
   );
 }
 

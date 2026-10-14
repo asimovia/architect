@@ -50,3 +50,10 @@ test('BT-4 — report + anchor on one line, and the bare echo, never reach the c
 test('BT-4 — a brace inside a string does not end the payload', () => {
   assert.equal(stripAnchorMarkers('ok\n⟦report⟧ {"next":"fix } later"}'), 'ok\n');
 });
+
+test('LIVE2 — a marker cut mid-stream is not painted (mf27 2026-10-14)', () => {
+  assert.equal(stripAnchorMarkers('Te aviso con el re-despliegue.⟦anchor'), 'Te aviso con el re-despliegue.');
+  assert.equal(stripAnchorMarkers('done.⟦anchor⟧ '), 'done.');
+  assert.equal(stripAnchorMarkers('done.⟦'), 'done.');
+  assert.equal(stripAnchorMarkers('a ⟦anchor⟧ {"initiative":"x"} b'), 'a b');
+});

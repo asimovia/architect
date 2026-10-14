@@ -38,10 +38,26 @@ export type ChatEventPatch =
   | { op: 'set'; list: ChatMsg[] };
 
 /** Index of the last assistant bubble still streaming, or -1. */
-function lastStreamingIdx(list: readonly ChatMsg[]): number {
+/**
+ * LIVE1/LIVE2 — can this turn-ending event (final, error, cancelled) have
+ * ended this streaming bubble? Its own stream, yes; another stream only if
+ * the bubble started no later than the event. Reopening a thread replays
+ * old endings on top of the running turn's bubble (mf27, 2026-10-04 and
+ * 2026-10-14: an error from 22:23 closed the turn started at 22:41, and a
+ * second copy of it was seeded below).
+ */
+export function turnEndEnds(ev: DaemonEvent, m: ChatMsg): boolean {
+  const sid = strOrUndef(ev.stream_id);
+  if (sid !== undefined && m.stream_id === sid) return true;
+  const endMs = Date.parse(strOrUndef(ev.ts) ?? '');
+  const startMs = Date.parse(m.ts ?? '');
+  return Number.isNaN(endMs) || Number.isNaN(startMs) || startMs <= endMs;
+}
+
+function lastStreamingIdx(list: readonly ChatMsg[], ev?: DaemonEvent): number {
   for (let i = list.length - 1; i >= 0; i -= 1) {
     const m = list[i]!;
-    if (m.kind === 'assistant' && m.streaming) return i;
+    if (m.kind === 'assistant' && m.streaming && (!ev || turnEndEnds(ev, m))) return i;
   }
   return -1;
 }
@@ -122,11 +138,7 @@ export function applyChatEvent(list: readonly ChatMsg[], ev: DaemonEvent): ChatE
       // history's old finals on top of the current turn's seeded bubble
       // (empty under Muse); without this check the first old final swept it
       // and the running turn vanished from the wall.
-      const finalMs = Date.parse(strOrUndef(ev.ts) ?? '');
-      const endedBy = (m: ChatMsg): boolean => {
-        const startMs = Date.parse(m.ts ?? '');
-        return Number.isNaN(finalMs) || Number.isNaN(startMs) || startMs <= finalMs;
-      };
+      const endedBy = (m: ChatMsg): boolean => turnEndEnds(ev, m);
       const stale = list.some((m, i) => i !== idx && m.kind === 'assistant' && m.streaming && endedBy(m));
       if (!stale) {
         if (idx >= 0) return { op: 'patch', index: idx, fields: { text: cleaned, streaming: false } };
@@ -175,7 +187,8 @@ export function applyChatEvent(list: readonly ChatMsg[], ev: DaemonEvent): ChatE
       // BT-17 — a delegation card can land after the streaming bubble
       // while the turn is still live, so "the bubble" is the last
       // streaming assistant, not necessarily the last message.
-      const lastIdx = lastStreamingIdx(list);
+      // LIVE2 — and only one this error can have ended (see turnEndEnds).
+      const lastIdx = lastStreamingIdx(list, ev);
       const last = list[lastIdx];
       const next: ChatMsg = {
         kind: 'system',
@@ -203,7 +216,7 @@ export function applyChatEvent(list: readonly ChatMsg[], ev: DaemonEvent): ChatE
       };
 
     case 'chat.cancelled': {
-      const lastIdx = lastStreamingIdx(list);
+      const lastIdx = lastStreamingIdx(list, ev);
       const last = list[lastIdx];
       if (last && last.kind === 'assistant' && last.streaming) {
         return { op: 'patch', index: lastIdx, fields: { streaming: false, cancelled: true } };
@@ -304,4 +317,29 @@ export function applyPatchToList(list: ChatMsg[], patch: ChatEventPatch): ChatMs
     return [...next, patch.msg];
   }
   return list;
+}
+
+/**
+ * LIVE2 — put the running turn's bubble(s) back into a replayed page: a
+ * bubble whose stream the page already finished is dropped (the final is
+ * there), the rest go in by start time, after everything sent before it.
+ */
+export function restoreLiveTail(
+  page: readonly ChatMsg[],
+  tail: readonly ChatMsg[],
+  ended: (streamId: string) => boolean = () => false,
+): ChatMsg[] {
+  const out = [...page];
+  for (const b of tail) {
+    if (b.stream_id && out.some((m) => m.kind === 'assistant' && m.stream_id === b.stream_id)) continue;
+    if (b.stream_id && ended(b.stream_id)) continue;
+    const at = Date.parse(b.ts ?? '');
+    let i = out.length;
+    if (!Number.isNaN(at)) {
+      const later = out.findIndex((m) => Date.parse(m.ts ?? '') > at);
+      if (later >= 0) i = later;
+    }
+    out.splice(i, 0, b);
+  }
+  return out;
 }

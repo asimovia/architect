@@ -47,7 +47,10 @@ export function stripAnchorMarkers(text: string): string {
   if (!text || !text.includes('⟦')) return text;
   let out = text;
   for (const name of ['report', 'anchor-progress', 'anchor']) out = sweepMarker(out, name);
-  return out.replace(/^[ \t]*⟦become⟧[ \t]*`?[a-z][a-z0-9-]{1,31}`?[ \t]*\n?/gm, '');
+  out = out.replace(/^[ \t]*⟦become⟧[ \t]*`?[a-z][a-z0-9-]{1,31}`?[ \t]*\n?/gm, '');
+  // LIVE2 — a streaming text can stop mid-marker (`…despliegue.⟦anchor`);
+  // the rest arrives with the next delta. Never paint the fragment.
+  return out.replace(/⟦[a-z-]{0,24}⟧?[ \t]*$/, '');
 }
 
 /**
