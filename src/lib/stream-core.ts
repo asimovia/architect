@@ -51,9 +51,6 @@ const preItems = new WeakMap<ChatMsg, StreamItem>();
 const queuedItems = new WeakMap<ChatMsg, StreamItem>();
 const singleSegs = new WeakMap<ChatMsg, AutoSegment>();
 const evSegs = new WeakMap<DaemonEvent, AutoSegment>();
-/** Last merged-queued bubble: its msg is rebuilt per recompute, so it
- *  stabilises on (source msg, merged text) instead of object identity. */
-let mergedCache: { src: ChatMsg; text: string; item: StreamItem } | null = null;
 
 function preItem(m: ChatMsg): StreamItem {
   const ts = m.ts ?? '';
@@ -154,6 +151,47 @@ export function wakesCoveredByCards(
   return hidden;
 }
 
+/**
+ * WALL1 (mf27, 2026-10-15) — operator messages sent while a turn was running
+ * wait for it: the daemon merges them into the NEXT turn. Ordered by send
+ * time they landed above the running turn's reply, and the wall showed two
+ * Architect headers in a row with the operator's message stranded above
+ * both. Returns, for each such message, the ts of the event that closed the
+ * turn it waited for; it sorts right after that event. A turn opens on a
+ * user message and closes on a final, an error or a cancel.
+ */
+export function answeredAfter(msgs: readonly ChatMsg[]): Map<ChatMsg, string> {
+  const out = new Map<ChatMsg, string>();
+  const ordered = msgs.filter((m) => !!m.ts).slice().sort((a, b) => a.ts!.localeCompare(b.ts!));
+  let open = false;
+  let waiting: ChatMsg[] = [];
+  let held: { at: string; msgs: ChatMsg[] } | null = null;
+  for (const m of ordered) {
+    if (m.kind === 'user') {
+      if (open) waiting.push(m);
+      else open = true;
+      continue;
+    }
+    // A later reply (or a running turn) is what proves the held messages
+    // waited: without one, a turn that left no closing event, or a page cut
+    // mid-history, would push the operator's messages down for nothing.
+    const replies = m.kind === 'assistant';
+    if (held && replies) {
+      for (const w of held.msgs) out.set(w, held.at);
+      held = null;
+    }
+    const closes =
+      (m.kind === 'assistant' && !m.streaming)
+      || (m.kind === 'system' && m.system_kind === 'error');
+    if (!closes || !open) continue;
+    if (waiting.length) held = { at: m.ts!, msgs: waiting };
+    // The waiting messages start the next turn straight away.
+    open = waiting.length > 0;
+    waiting = [];
+  }
+  return out;
+}
+
 export function buildStream(
   conv: string,
   msgs: ChatMsg[],
@@ -179,6 +217,8 @@ export function buildStream(
   // ALREADY-ANSWERED message kept the "queued" badge and rendered BELOW its
   // own response (operator field 2026-06-17). No live bubble ⇒ nothing is
   // queued; trailing messages just flow in sequence and trigger the next turn.
+  // WALL1 — each queued message keeps its own bubble and header: they are
+  // merged for the agent, never on the operator's wall.
   const covered = wakesCoveredByCards(msgs, isWake);
   msgs.forEach((m, i) => {
     if (i === liveIdx) return;
@@ -197,38 +237,20 @@ export function buildStream(
     }
   });
 
-  // 2026-06-10 case 1 — collapse multiple QUEUED user bubbles into a
-  // single growing bubble whose text is the concatenation (`\n\n` separator).
-  // Mirrors the daemon-side merge-on-arrival in `ChatSessions.queue`
-  // (py-1.12.20): the agent sees one continuous message, the operator
-  // sees one growing bubble. Operator: "Si mandamos otro mientras hay
-  // uno en espera, añadimos el texto, con una linea en medio, para que
-  // se vea que es otro párrafo."
-  if (queued.length > 1 && queued.every((x) => x.kind === 'msg' && x.msg.kind === 'user')) {
-    const first = queued[0]!;
-    if (first.kind === 'msg') {
-      const mergedText = queued
-        .map((x) => (x.kind === 'msg' ? (x.msg.text ?? '') : ''))
-        .filter((t) => t.length > 0)
-        .join('\n\n');
-      // The merged msg is rebuilt per recompute, so its wrapper stabilises
-      // on (source msg, merged text): same inputs ⇒ same node, no <img> blink.
-      if (!mergedCache || mergedCache.src !== first.msg || mergedCache.text !== mergedText) {
-        mergedCache = {
-          src: first.msg,
-          text: mergedText,
-          item: {
-            kind: 'msg',
-            ts: first.ts,
-            prepend: true,
-            msg: { ...first.msg, text: mergedText },
-          },
-        };
-      }
-      queued = [mergedCache.item];
+  // WALL1 — a message sent while a turn ran is answered by the NEXT turn,
+  // so it reads after the running turn's reply, not before it by send time.
+  const waitedFor = answeredAfter(msgs);
+  const key = (it: StreamItem): [string, number] => {
+    if (it.kind === 'msg') {
+      const after = waitedFor.get(it.msg);
+      if (after !== undefined) return [after, 1];
     }
-  }
-
-  pre.sort((a, b) => a.ts.localeCompare(b.ts));
+    return [it.ts, 0];
+  };
+  pre.sort((a, b) => {
+    const [ta, ra] = key(a);
+    const [tb, rb] = key(b);
+    return ta === tb ? ra - rb : ta.localeCompare(tb);
+  });
   return { pre, queued, live };
 }
