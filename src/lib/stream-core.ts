@@ -205,7 +205,7 @@ export function buildStream(
   const live: ChatMsg | null = liveIdx >= 0 ? msgs[liveIdx]! : null;
 
   const pre: StreamItem[] = [];
-  let queued: StreamItem[] = [];
+  const queued: StreamItem[] = [];
 
   // A-QUEUE-ORDER-01 (revised 2026-06-17) — a user message is "queued ·
   // merges into next turn" ONLY when there is an ACTUAL live streaming
