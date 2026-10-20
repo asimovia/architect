@@ -35,6 +35,7 @@ import { ProjectDebugModalHost } from '~/components/modals/ProjectDebugModal';
 // area block + auto-poll). No more floating dismissable modal.
 import { AutoUpdateFlowHost } from '~/components/modals/AutoUpdateFlow';
 import { AddProjectWizardHost } from '~/components/modals/AddProjectWizard';
+import { ClaudeSignInHost } from '~/components/ClaudeSignInDialog';
 import StoryRunner from '~/components/story/StoryRunner';
 import ConnectionGate from '~/components/ConnectionGate';
 import Cockpit from '~/components/Cockpit';
@@ -234,6 +235,7 @@ export default function App() {
           inline panel in Cockpit.tsx */}
       <AutoUpdateFlowHost />
       <AddProjectWizardHost />
+      <ClaudeSignInHost />
       <StoryRunner />
     </>
   );

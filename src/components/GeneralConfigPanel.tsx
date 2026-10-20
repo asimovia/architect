@@ -16,6 +16,7 @@
  */
 
 import { DaemonBlock, RemoteControlBlock, ClientsBlock } from '~/components/zones/config/blocks';
+import ClaudeCodeAuthBlock from '~/components/zones/config/ClaudeCodeAuthBlock';
 
 // DM-CLI-15 — `open` flows into ClientsBlock `active` so every drawer open
 // re-probes the daemon (fresh install/login status, no browser refresh).
@@ -29,6 +30,7 @@ export default function GeneralConfigPanel(props: { open?: boolean } = {}) {
       </p>
       <DaemonBlock />
       <RemoteControlBlock />
+      <ClaudeCodeAuthBlock active={props.open ?? true} />
       <ClientsBlock active={props.open ?? true} />
     </div>
   );

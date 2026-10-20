@@ -40,7 +40,13 @@ import type { Result, TextResult } from './result';
 const REQUEST_TIMEOUT_MS = 15000;
 // PICK1 — routes that legitimately wait on the operator (a native dialog
 // stays open while they browse). The daemon gives up at 600 s.
-const SLOW_ROUTE_TIMEOUT_MS: Record<string, number> = { '/fs/pick-folder': 610_000 };
+const SLOW_ROUTE_TIMEOUT_MS: Record<string, number> = {
+  '/fs/pick-folder': 610_000,
+  // CCA1 — the daemon waits on the Claude Code CLI (link: ≤30 s, token: ≤60 s).
+  '/clients/claude-code/login/start': 40_000,
+  '/clients/claude-code/login/finish': 70_000,
+  '/clients/claude-code/auth': 30_000,
+};
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 

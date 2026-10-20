@@ -157,6 +157,29 @@ export class ConfigMethods extends SystemMethods {
     return this.request<RemoteTokenResponse>('POST', '/remote/token/rotate', {}, signal);
   }
 
+  /** CCA1 — is Claude Code signed in on the daemon's machine? */
+  async claudeAuthStatus(signal?: AbortSignal): Promise<Result<ClaudeAuthStatus>> {
+    return this.request<ClaudeAuthStatus>('GET', '/clients/claude-code/auth', undefined, signal);
+  }
+
+  /** CCA1 — start `claude setup-token`; returns the sign-in page URL. */
+  async claudeLoginStart(): Promise<Result<{ url: string }>> {
+    return this.request<{ url: string }>('POST', '/clients/claude-code/login/start', {}, undefined);
+  }
+
+  /** CCA1 — hand the code from the sign-in page to the waiting CLI. */
+  async claudeLoginFinish(code: string): Promise<Result<{ stored: boolean; expires_at: string }>> {
+    return this.request<{ stored: boolean; expires_at: string }>('POST', '/clients/claude-code/login/finish', { code }, undefined);
+  }
+
+  async claudeLoginCancel(): Promise<Result<{ cancelled: boolean }>> {
+    return this.request<{ cancelled: boolean }>('POST', '/clients/claude-code/login/cancel', {}, undefined);
+  }
+
+  async claudeAuthForget(): Promise<Result<{ forgotten: boolean }>> {
+    return this.request<{ forgotten: boolean }>('POST', '/clients/claude-code/auth/forget', {}, undefined);
+  }
+
   /** PICK1 — POST /fs/pick-folder: the daemon opens the OS folder dialog
    *  on its machine. 200 {path} | {cancelled}; 501 on a headless host;
    *  409 while another dialog is open. Feature `fs.pick-folder.v1`. */
@@ -192,4 +215,15 @@ export class ConfigMethods extends SystemMethods {
   ): Promise<Result<ProvidersConfigResponse>> {
     return this.request<ProvidersConfigResponse>('POST', '/config/providers', body, signal);
   }
+}
+
+/** CCA1 — GET /clients/claude-code/auth. The token itself never leaves the daemon. */
+export interface ClaudeAuthStatus {
+  stored: boolean;
+  stored_at: string | null;
+  expires_at: string | null;
+  expired: boolean;
+  cli: { logged_in: boolean; method: string | null; subscription: string | null } | null;
+  signed_in: boolean;
+  login_in_progress: boolean;
 }
