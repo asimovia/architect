@@ -27,6 +27,8 @@
 import { createMemo } from 'solid-js';
 import { chatStore } from '~/state/chat';
 import { clientsStore } from '~/state/clients';
+import { daemonStore } from '~/state/daemon';
+import { log } from '~/lib/log';
 import { withLiveOption } from '~/lib/member-shadow';
 import { Combo, type ComboOption } from '~/components/ui/Combo';
 import {
@@ -69,6 +71,24 @@ export default function ModelEffortPickers(props: {
     let next = selectClient(client, cat);
     if (provider !== next.provider) next = selectProvider(next, provider, cat);
     chatStore.setConvEngine(props.conv, next);
+    applyPin({ client: next.client, provider: next.provider, model: next.model === 'auto' ? '' : next.model });
+  };
+
+  // ENG1 (mf27, 2026-10-19) — tell the daemon NOW. Sent only with the next
+  // message, the switch missed every turn the daemon starts on its own
+  // (wakes, the queue, delegated children), which kept running on Muse.
+  const applyPin = (body: { client: string; provider: string; model: string }): void => {
+    const c = daemonStore.state.client;
+    if (!c || !(daemonStore.state.health?.features ?? []).includes('chat.engine-pin.v2')) return;
+    void c.chatEnginePin(props.conv, body).then((r) => {
+      if (!r.ok) log.warn('engine pin not applied', { conv: props.conv, status: r.status });
+    });
+  };
+  const pickModel = (id: string): void => {
+    chatStore.setConvModel(props.conv, id);
+    // A pinned conv keeps its model daemon-side too: wakes read it there.
+    const pin = chatStore.state.convs[props.conv]?.engine_pin;
+    if (pin) applyPin({ client: pin.client, provider: pin.provider, model: id === 'auto' ? '' : id });
   };
 
   // The live value is always offered as its own row: without a matching
@@ -99,7 +119,7 @@ export default function ModelEffortPickers(props: {
         class={SELECT_MODEL}
         value={props.model}
         options={modelOptions()}
-        onChange={(id) => chatStore.setConvModel(props.conv, id)}
+        onChange={pickModel}
         title="Model — applies from the next message"
         placeholder={modelOptions().length ? '—' : 'loading…'}
       />

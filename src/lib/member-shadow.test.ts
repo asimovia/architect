@@ -171,3 +171,15 @@ test('ES-2 — a client picked in the header beats the card until un-pinned', ()
   );
   assert.equal(unpinned.client, 'muse');
 });
+
+test('ENG1 — the header shows the engine the daemon pinned, not the card (mf27 2026-10-19)', () => {
+  const meta = { member: 'a01' };
+  const card = { client: 'claude-code', model: 'opus' };
+  const snap = { client: 'muse', model: 'opus', engine_pin: { client: 'muse', provider: 'anthropic' } };
+  assert.equal(resolveDisplayEngine(meta, snap, card).client, 'muse');
+  // the daemon says "no pin": a stale flag in this tab must not win
+  const unpinned = { client: 'claude-code', engine_pin: null };
+  assert.equal(resolveDisplayEngine({ ...meta, enginePinned: true, client: 'muse' }, unpinned, card).client, 'claude-code');
+  // an older daemon that does not report pins: the tab's flag still counts
+  assert.equal(resolveDisplayEngine({ ...meta, enginePinned: true, client: 'muse' }, { client: 'muse' }, card).client, 'muse');
+});

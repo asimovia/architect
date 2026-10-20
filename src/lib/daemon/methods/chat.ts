@@ -107,6 +107,16 @@ export class ChatMethods extends RoadmapMethods {
 
   // ── Standard v16 chat-turn queue (V107.41, daemon py-1.12.12+) ────
 
+  /** ENG1 — POST /chat/conv/<id>/engine: apply the header's engine now
+   *  (`{clear: true}` hands the conv back to its member card). */
+  async chatEnginePin(
+    conv: string,
+    body: { client: string; provider?: string; model?: string } | { clear: true },
+    signal?: AbortSignal,
+  ): Promise<Result<{ conv: string; engine_pin: { client: string; provider: string } | null }>> {
+    return this.request('POST', `/chat/conv/${encodeURIComponent(conv)}/engine`, body, signal);
+  }
+
   async queueList(conv: string, signal?: AbortSignal): Promise<Result<ChatQueueResponse>> {
     return this.request<ChatQueueResponse>(
       'GET', `/chat/conv/${encodeURIComponent(conv)}/queue`, undefined, signal,

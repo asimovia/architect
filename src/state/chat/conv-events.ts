@@ -62,6 +62,14 @@ function mirrorMeta(conv: string, ev: DaemonEvent): void {
   }
 }
 
+function pinOf(v: unknown): { client: string; provider: string } | null {
+  if (!v || typeof v !== 'object') return null;
+  const o = v as { client?: unknown; provider?: unknown };
+  return typeof o.client === 'string' && o.client
+    ? { client: o.client, provider: typeof o.provider === 'string' && o.provider ? o.provider : 'anthropic' }
+    : null;
+}
+
 function onCreatedOrMetaUpdated(conv: string, ev: DaemonEvent): void {
   const cur = state.convs[conv];
   const ts = str(ev.ts);
@@ -77,6 +85,8 @@ function onCreatedOrMetaUpdated(conv: string, ev: DaemonEvent): void {
     effort: str(ev.effort) ?? cur?.effort ?? null,
     client: str(ev.client) ?? cur?.client ?? null,
     provider: str(ev.provider) ?? cur?.provider ?? null,
+    // ENG1 — only an event that speaks about the pin may change it.
+    engine_pin: 'engine_pin' in ev ? pinOf(ev.engine_pin) : cur?.engine_pin,
   });
   mirrorMeta(conv, ev);
 }
@@ -248,6 +258,7 @@ export function ingestConvEvent(ev: DaemonEvent): void {
         setState('convMeta', conv, 'enginePinned', false);
         saveConvMeta();
       }
+      if (state.convs[conv]) setState('convs', conv, 'engine_pin', null);
       return;
     default:
       return;

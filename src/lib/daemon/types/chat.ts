@@ -122,6 +122,9 @@ export interface ChatConvSummary {
   /** multi-provider-agents (MPV1) — the LLM backend the claude-code
    *  client talks to. `null`/'anthropic' → native. */
   provider?: string | null;
+  /** ENG1 (py-1.42.6) — the engine pinned from the chat header. It beats
+   *  the member card on every turn; absent on older daemons. */
+  engine_pin?: { client: string; provider: string } | null;
   /** agent-team (ATM10) — the roster member this conv is bound to.
    *  `null` for convs not created from/bound to a team profile. */
   member?: string | null;

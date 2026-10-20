@@ -39,6 +39,8 @@ export interface ShadowMemberFile {
 /** Daemon-side snapshot values for one conv (subset of the conv snapshot —
  *  its fields are `string | null`, hence the wider types). */
 export interface ShadowSnap {
+  /** ENG1 — the daemon's pin; `undefined` = a daemon that does not say. */
+  engine_pin?: { client: string; provider: string } | null;
   model?: string | null;
   effort?: string | null;
   client?: string | null;
@@ -78,12 +80,21 @@ export function resolveDisplayEngine(
 ): { model: string; effort: string; client: string; provider: string } {
   const pinnedModel = override(meta?.model, 'auto');
   const pinnedEffort = override(meta?.effort, 'default');
-  const pinnedProvider = (meta?.provider ?? '').trim().toLowerCase();
+  // ENG1 (mf27, 2026-10-19) — the daemon's pin is what the turn runs on.
+  // The header read this tab's own flag and then the card, so it showed
+  // "Claude" for a day while every turn ran on Muse. A daemon that reports
+  // pins is the only truth; the local flag is a fallback for one that does not.
+  const daemonPin = snap?.engine_pin;
+  const pinnedProvider = daemonPin
+    ? daemonPin.provider.trim().toLowerCase()
+    : (meta?.provider ?? '').trim().toLowerCase();
   const snapProvider = (snap?.provider ?? '').trim().toLowerCase();
   const memberProvider = (member?.provider ?? '').trim().toLowerCase();
   // ES-2 — a client picked in the header for this conv beats the card
   // (its provider already leads the provider chain below via meta.provider).
-  const pinnedClient = meta?.enginePinned ? (meta.client ?? '').trim() : '';
+  const pinnedClient = daemonPin
+    ? daemonPin.client.trim()
+    : daemonPin === undefined && meta?.enginePinned ? (meta.client ?? '').trim() : '';
   if (meta?.member && member) {
     const client =
       pinnedClient
@@ -106,7 +117,7 @@ export function resolveDisplayEngine(
   }
   // Unbound conv (or a member the roster hasn't hydrated yet): the daemon
   // snapshot is the best truth available.
-  const fallbackClient = (meta?.client ?? '').trim() || (snap?.client ?? '').trim() || 'claude-code';
+  const fallbackClient = pinnedClient || (meta?.client ?? '').trim() || (snap?.client ?? '').trim() || 'claude-code';
   const rawFallback = pinnedModel || (snap?.model ?? '').trim() || defaultModelFor(fallbackClient);
   const fallbackModel = isStaleModelForClient(fallbackClient, rawFallback)
     ? defaultModelFor(fallbackClient)
