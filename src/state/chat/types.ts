@@ -71,6 +71,9 @@ export interface ChatMsg {
    */
   kind: 'user' | 'assistant' | 'system';
   text: string;
+  /** ENG1/CCA4 — the code client that produced an assistant reply (finals
+   *  carry it since py-1.42.6). Absent on older replies. */
+  client?: string;
   author?: string;
   ts?: string;
   streaming?: boolean;

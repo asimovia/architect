@@ -25,7 +25,7 @@ import ArchitectViolationBanner from '~/components/architect/ArchitectViolationB
 import BubbleHeader from './BubbleHeader';
 import QuotaExceededNotice from './QuotaExceededNotice';
 import AuthRequiredNotice from './AuthRequiredNotice';
-import { isClaudeAuthError } from './auth-error';
+import { isClaudeCodeAuthFailure } from './auth-error';
 import { detectQuotaError } from './quota-error';
 import { convAgentId, convAgentName } from './agent-identity';
 import { formatBubbleTs } from './format';
@@ -56,7 +56,7 @@ export function AssistantBubble(props: { conv: string; msg: ChatMsg; headerless?
   // card instead of the raw "[x error] API error 429 …" dump.
   const showsQuota = (): boolean => settled() && detectQuotaError(props.msg.text) !== null;
   // CCA1 — Claude Code's own "cannot authenticate" is not the agent talking.
-  const showsAuth = (): boolean => settled() && isClaudeAuthError(props.msg.text);
+  const showsAuth = (): boolean => settled() && isClaudeCodeAuthFailure(props.msg.text, props.msg.client);
 
   return (
     <div class="flex flex-col gap-1.5 items-start w-full">
@@ -85,7 +85,7 @@ export function AssistantBubble(props: { conv: string; msg: ChatMsg; headerless?
       </Show>
       <Show when={showsValidationRed()} fallback={
         <>
-          <Show when={!showsAuth()} fallback={<AuthRequiredNotice text={props.msg.text} />}>
+          <Show when={!showsAuth()} fallback={<AuthRequiredNotice text={props.msg.text} ts={props.msg.ts} />}>
           <Show when={showsQuota()} fallback={
             <>
           <Show when={showsHaltViolation()}>

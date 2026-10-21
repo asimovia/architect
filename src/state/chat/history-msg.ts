@@ -36,6 +36,7 @@ export function historyMsg(ev: DaemonEvent): ChatMsg | null {
       streaming: false,
       ts: String(ev.ts ?? ''),
       stream_id: typeof ev.stream_id === 'string' ? ev.stream_id : undefined,
+      client: typeof ev.client === 'string' ? ev.client : undefined,
     };
   }
   // REL1 — a turn that died is part of the conversation: the daemon

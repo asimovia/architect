@@ -17,6 +17,15 @@ const AUTH_PATTERNS: RegExp[] = [
   /^\s*Not logged in\b/i,
 ];
 
+/**
+ * CCA4 — only a reply Claude Code itself produced. Muse, Codex and the rest
+ * have their own logins; their failures must not offer this sign-in. A reply
+ * that does not say which client made it (before py-1.42.6) never qualifies.
+ */
+export function isClaudeCodeAuthFailure(text: string, client: string | undefined): boolean {
+  return client === 'claude-code' && isClaudeAuthError(text);
+}
+
 export function isClaudeAuthError(text: string): boolean {
   if (!text || text.length > 2000) return false;
   const head = text.slice(0, ENVELOPE_WINDOW);

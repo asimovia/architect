@@ -141,7 +141,7 @@ export function applyChatEvent(list: readonly ChatMsg[], ev: DaemonEvent): ChatE
       const endedBy = (m: ChatMsg): boolean => turnEndEnds(ev, m);
       const stale = list.some((m, i) => i !== idx && m.kind === 'assistant' && m.streaming && endedBy(m));
       if (!stale) {
-        if (idx >= 0) return { op: 'patch', index: idx, fields: { text: cleaned, streaming: false } };
+        if (idx >= 0) return { op: 'patch', index: idx, fields: { text: cleaned, streaming: false, client: strOrUndef(ev.client) } };
         return {
           op: 'append',
           msg: {
@@ -151,13 +151,14 @@ export function applyChatEvent(list: readonly ChatMsg[], ev: DaemonEvent): ChatE
             ts: strOrUndef(ev.ts),
             streaming: false,
             stream_id: streamId,
+            client: strOrUndef(ev.client),
           },
         };
       }
       const swept: ChatMsg[] = [];
       list.forEach((m, i) => {
         if (i === idx) {
-          swept.push({ ...m, text: cleaned, streaming: false });
+          swept.push({ ...m, text: cleaned, streaming: false, client: strOrUndef(ev.client) });
           return;
         }
         if (m.kind === 'assistant' && m.streaming && endedBy(m)) {
@@ -174,6 +175,7 @@ export function applyChatEvent(list: readonly ChatMsg[], ev: DaemonEvent): ChatE
           ts: strOrUndef(ev.ts),
           streaming: false,
           stream_id: streamId,
+          client: strOrUndef(ev.client),
         });
       }
       return { op: 'set', list: swept };
