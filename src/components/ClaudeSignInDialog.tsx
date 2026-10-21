@@ -15,6 +15,16 @@ import { claudeAuth, refreshClaudeAuth } from '~/state/claude-auth';
 
 type Step = 'idle' | 'opening' | 'code' | 'saving' | 'done';
 
+/** The daemon's own sentence from an error body, if it sent one. */
+function daemonMessage(body: string): string {
+  try {
+    const e = (JSON.parse(body) as { error?: unknown }).error;
+    return typeof e === 'string' ? e : '';
+  } catch {
+    return '';
+  }
+}
+
 function fmtDate(iso: string | null | undefined): string {
   if (!iso) return '';
   const d = new Date(iso);
@@ -48,7 +58,7 @@ function ClaudeSignInDialog() {
     const r = await c.claudeLoginStart();
     if (!r.ok) {
       tab?.close();
-      setError(r.error || 'Could not start the sign-in.');
+      setError(daemonMessage(r.body) || 'Could not start the sign-in.');
       setStep('idle');
       return;
     }
@@ -65,8 +75,18 @@ function ClaudeSignInDialog() {
     setStep('saving');
     const r = await c.claudeLoginFinish(v);
     if (!r.ok) {
-      setError(r.error || 'Claude Code did not accept the code.');
-      setStep(r.status === 410 ? 'idle' : 'code');
+      // 400 = not a code (a stray clipboard, 2026-10-21: a calendar entry) —
+      // the sign-in is still waiting, paste again. Anything else ended it:
+      // each code works once, for the sign-in that asked for it.
+      if (r.status === 400) {
+        setError('That does not look like the code — copy it again from the sign-in page and paste it here.');
+        setStep('code');
+      } else {
+        setError(`${daemonMessage(r.body) || 'Claude Code did not accept the code.'} Start again from step 1 — each code works once.`);
+        setCode('');
+        setUrl('');
+        setStep('idle');
+      }
       return;
     }
     setExpires(r.data.expires_at);
@@ -136,7 +156,7 @@ function ClaudeSignInDialog() {
                   type="text"
                   autofocus
                   value={code()}
-                  onInput={(e) => setCode(e.currentTarget.value)}
+                  onInput={(e) => { setCode(e.currentTarget.value); setError(''); }}
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void finish(); } }}
                   placeholder="Paste the code"
                   autocomplete="off"
