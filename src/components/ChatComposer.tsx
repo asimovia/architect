@@ -13,7 +13,7 @@
  * input row (Stop button, scope strip) is the parent's concern.
  */
 
-import { For, Show, createEffect, createMemo, createSignal } from 'solid-js';
+import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { chatStore, ONBOARDING_CONV_ID } from '~/state/chat';
 import { daemonStore } from '~/state/daemon';
 import { isProjectEmpty } from '~/state/server';
@@ -63,6 +63,10 @@ export default function ChatComposer(props: {
   };
 
   const { draft, setDraft, imgs, setImgs, docs, setDocs } = useComposerDraft(() => props.conv, grow);
+
+  // PASTE1 — a remount drops focus mid-paste; record when it happens.
+  onMount(() => debugEmit('ux.composer', 'composer mounted', { conv: props.conv, lvl: 'debug' }));
+  onCleanup(() => debugEmit('ux.composer', 'composer unmounted', { conv: props.conv, lvl: 'debug' }));
 
   // V107.41 — Hydrate queue on focus (lazy fetch). QISO1 — once per
   // project + conv per visit: the same conv id exists in every project,
@@ -207,12 +211,39 @@ export default function ChatComposer(props: {
     e.preventDefault(); void send();
   };
 
+  // PASTE1 (2026-10-24) — "I have to paste two or three times". A copy
+  // from some apps carries the text AND a file (a rendered image, an
+  // attachment); the file branch called preventDefault, so the text never
+  // landed. Text always pastes; a file is attached only when the clipboard
+  // has no text (a screenshot). Each paste is logged with what it carried
+  // and whether the text reached the box, so the next miss is visible.
   const onPaste = (e: ClipboardEvent) => {
-    const items = e.clipboardData?.items; if (!items) return;
-    for (let i = 0; i < items.length; i += 1) {
-      const it = items[i]!;
-      if (it.kind === 'file') { const f = it.getAsFile(); if (f) { e.preventDefault(); addFile(f); } }
+    const dt = e.clipboardData;
+    const items = dt?.items;
+    const text = dt?.getData('text/plain') ?? '';
+    const kinds: string[] = [];
+    let files = 0;
+    if (items) {
+      for (let i = 0; i < items.length; i += 1) {
+        const it = items[i]!;
+        kinds.push(`${it.kind}:${it.type}`);
+        if (it.kind === 'file' && !text) {
+          const f = it.getAsFile();
+          if (f) { e.preventDefault(); addFile(f); files += 1; }
+        }
+      }
     }
+    const before = taEl?.value.length ?? 0;
+    const focused = document.activeElement === taEl;
+    // After the browser's own insertion (a microtask can run before it).
+    setTimeout(() => {
+      const after = taEl?.value.length ?? 0;
+      debugEmit('ux.paste', text && after <= before ? 'paste did not reach the box' : 'paste', {
+        conv: props.conv,
+        lvl: text && after <= before ? 'warn' : 'info',
+        data: { kinds, text_chars: text.length, files, before, after, focused, disabled: sending() },
+      });
+    }, 50);
   };
 
   const onDrop = (e: DragEvent) => {
