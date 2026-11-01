@@ -86,7 +86,7 @@ function openAboutModal(): void {
           <a href="https://meshkore.com/architect" target="_blank" rel="noopener" class="text-emerald-400 hover:underline">→ meshkore.com/architect</a>
           <a href="https://meshkore.com/standard" target="_blank" rel="noopener" class="text-emerald-400 hover:underline">→ The MeshKore standard</a>
           <a href="https://meshkore.com/docs" target="_blank" rel="noopener" class="text-emerald-400 hover:underline">→ Documentation</a>
-          <a href="https://github.com/meshkore" target="_blank" rel="noopener" class="text-emerald-400 hover:underline">→ GitHub</a>
+          <a href="https://github.com/asimovia" target="_blank" rel="noopener" class="text-emerald-400 hover:underline">→ GitHub</a>
         </div>
       </div>
     ),
