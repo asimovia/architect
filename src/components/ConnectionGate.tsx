@@ -10,7 +10,16 @@
 import { Match, Show, Switch, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import type { ConnectionStatus } from '~/lib/connection';
 import CommandBlock from '~/components/CommandBlock';
-import { agentPromptForHome, recallDaemonHome } from '~/lib/daemon-home';
+import {
+  agentPromptForHome,
+  certCheckCommand,
+  meshctlDownloadCommand,
+  recallDaemonHome,
+  runningCheckCommand,
+  tlsRefreshCommand,
+  usesMeshctl,
+  type DaemonHome,
+} from '~/lib/daemon-home';
 import { watchDaemonHealth } from '~/lib/health-watch';
 import { log } from '~/lib/log';
 
@@ -33,7 +42,7 @@ export default function ConnectionGate(props: {
             One cockpit for your <span class="grad">AI agents</span>
           </h1>
           <p class="text-gray-400 leading-relaxed text-sm">
-            This page connects to your local <span class="font-mono text-emerald-300">meshcore</span> daemon and unlocks the cockpit. New here? Follow the setup at <a class="text-emerald-400 hover:underline" href="https://meshkore.com/architect" target="_blank" rel="noopener">meshkore.com/architect</a>.
+            This page connects to the MeshKore daemon on this machine and unlocks the cockpit. New here? Follow the setup at <a class="text-emerald-400 hover:underline" href="https://meshkore.com/architect" target="_blank" rel="noopener">meshkore.com/architect</a>.
           </p>
         </header>
 
@@ -133,66 +142,110 @@ function NoDaemon(props: { ports: number[]; onRetry: () => void }) {
     const hi = props.ports[props.ports.length - 1];
     return lo === hi ? `localhost:${lo}` : `localhost:${lo}–${hi}`;
   };
+  const port = (): number => (props.ports.includes(5573) ? 5573 : props.ports[0] ?? 5573);
+  const startCmd = (h: DaemonHome | null): string =>
+    h ? h.start : 'cd "<meshkore-server folder>" && python3 .meshkore/scripts/daemon.py';
+
+  // 2026-11-03 (DOC-DAEMON3) — "can't reach", not "not running". The browser
+  // cannot tell a stopped daemon from a running one whose loopback
+  // certificate expired (it happened), so the screen no longer asserts
+  // either: it walks the checks in the order that tells them apart.
   return (
     <div>
-      <h2 class="text-lg font-bold mb-2">The daemon is not running</h2>
+      <h2 class="text-lg font-bold mb-2">Can&rsquo;t reach the MeshKore daemon</h2>
       <p class="text-gray-400 text-sm leading-relaxed mb-4">
         MeshKore runs <span class="text-gray-200">one daemon per machine</span> that serves every project.
-        We probed <span class="font-mono text-emerald-300">{probedRange()}</span> and nothing answered
-        {home() ? ' — most likely the Mac rebooted.' : '.'}
+        This page looked for it at <span class="font-mono text-emerald-300">{probedRange()}</span> and got no answer.
+        It may be stopped{home() ? ' (a restart of the computer is the usual reason)' : ''}, or running with an
+        expired certificate &mdash; from the browser both look the same. Check in this order:
       </p>
 
-      <Show
-        when={home()}
-        fallback={
-          <div class="bg-[rgba(11,18,32,0.6)] border border-gray-700/35 rounded-lg p-3.5 mb-4">
-            <div class="text-[13.5px] font-semibold text-gray-200 mb-1">This browser has never seen a daemon here</div>
-            <p class="text-[12px] text-gray-500 leading-relaxed mb-2.5">
-              Set it up once following{' '}
-              <a class="text-emerald-300 hover:underline" href="https://meshkore.com/architect" target="_blank" rel="noreferrer">meshkore.com/architect</a>
-              , then start it from its folder. As soon as it answers, this page connects on its own and remembers where it lives.
-            </p>
-            <CommandBlock>{'cd <meshkore-server folder> && python3 .meshkore/scripts/daemon.py'}</CommandBlock>
-          </div>
-        }
-      >
+      <Show when={home()}>
         {(h) => (
-          <div class="bg-[rgba(11,18,32,0.6)] border border-gray-700/35 rounded-lg p-3.5 mb-4">
-            <div class="flex items-center gap-2.5 mb-2.5">
-              <div class="flex-1 min-w-0">
-                <div class="text-[13.5px] font-semibold text-gray-200">Installed at</div>
-                <div class="text-[12px] text-gray-400 font-mono break-all mt-0.5">{h().path}</div>
-                <div class="text-[11px] text-gray-500 mt-1">
-                  last seen {relativeLastSeen(h().seen_at)}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowAgent((v) => !v)}
-                class="flex-shrink-0 text-[10px] uppercase tracking-wider px-2 py-1 rounded border border-gray-700 hover:border-emerald-500/50 text-gray-400 hover:text-emerald-200 transition-colors"
-              >
-                {showAgent() ? 'hide prompt' : 'Claude Code'}
-              </button>
+          <div class="flex items-center gap-2.5 mb-3">
+            <div class="flex-1 min-w-0">
+              <div class="text-[12px] text-gray-500">Installed at</div>
+              <div class="text-[12px] text-gray-300 font-mono break-all">{h().path}</div>
+              <div class="text-[11px] text-gray-500 mt-0.5">last connected {relativeLastSeen(h().seen_at)}</div>
             </div>
-            <CommandBlock>{h().start}</CommandBlock>
-            <p class="text-[11.5px] text-gray-500 leading-relaxed mt-2">
-              Paste it in any terminal. It keeps running after you close that terminal or VS Code;
-              stop it with <span class="font-mono text-gray-400">{h().stop}</span>.
-            </p>
-            <Show when={showAgent()}>
-              <div class="mt-2.5">
-                <CommandBlock multiline label="Paste this into Claude Code / Cursor / Cline">
-                  {agentPromptForHome(h())}
-                </CommandBlock>
-              </div>
-            </Show>
           </div>
         )}
       </Show>
 
-      <button type="button" onClick={props.onRetry} class="px-3 py-1.5 rounded-md bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-semibold text-xs transition-colors">
-        Retry detection
-      </button>
+      <ol class="space-y-3 mb-4">
+        <li class="bg-[rgba(11,18,32,0.6)] border border-gray-700/35 rounded-lg p-3.5">
+          <div class="text-[13.5px] font-semibold text-gray-200 mb-1">1. Is it running?</div>
+          <CommandBlock>{runningCheckCommand(port())}</CommandBlock>
+          <p class="text-[12px] text-gray-500 leading-relaxed mt-2">
+            JSON with <span class="font-mono text-gray-400">"ok": true</span> means it is running &mdash; go to step 2.
+            No answer means it is stopped; start it:
+          </p>
+          <div class="mt-2">
+            <CommandBlock>{startCmd(home())}</CommandBlock>
+          </div>
+          <Show
+            when={usesMeshctl(home())}
+            fallback={
+              <p class="text-[11.5px] text-gray-500 leading-relaxed mt-2">
+                This form stops when you close the terminal that runs it. To keep it running, and to make it
+                start with the computer, get the control script and use{' '}
+                <span class="font-mono text-gray-400">meshctl.sh start</span> /{' '}
+                <span class="font-mono text-gray-400">install</span> (macOS and Linux):
+                <span class="block mt-1.5">
+                  <CommandBlock>{meshctlDownloadCommand(home())}</CommandBlock>
+                </span>
+              </p>
+            }
+          >
+            <p class="text-[11.5px] text-gray-500 leading-relaxed mt-2">
+              It keeps running after you close that terminal; stop it with{' '}
+              <span class="font-mono text-gray-400">{home()!.stop}</span>.
+            </p>
+          </Show>
+        </li>
+
+        <li class="bg-[rgba(11,18,32,0.6)] border border-gray-700/35 rounded-lg p-3.5">
+          <div class="text-[13.5px] font-semibold text-gray-200 mb-1">2. Is its certificate valid?</div>
+          <p class="text-[12px] text-gray-500 leading-relaxed mb-2">
+            The same check, without <span class="font-mono text-gray-400">-k</span> &mdash; this is the request the browser makes:
+          </p>
+          <CommandBlock>{certCheckCommand(port())}</CommandBlock>
+          <p class="text-[12px] text-gray-500 leading-relaxed mt-2">
+            A certificate error here (while step 1 answered), or <span class="font-mono text-gray-400">"tls": false</span> in
+            step 1, means the TLS bundle next to the daemon is expired or missing. Fetch a current one, then restart the daemon:
+          </p>
+          <div class="mt-2">
+            <CommandBlock multiline>{tlsRefreshCommand(home())}</CommandBlock>
+          </div>
+        </li>
+      </ol>
+
+      <p class="text-[12px] text-gray-500 leading-relaxed mb-4">
+        Both fine and still nothing? Your router may block <span class="font-mono text-gray-400">daemon.meshkore.com</span> (it
+        must resolve to 127.0.0.1). The full guide:{' '}
+        <a class="text-emerald-300 hover:underline" href="https://meshkore.com/architect#daemon" target="_blank" rel="noreferrer">meshkore.com/architect#daemon</a>.
+        This page reconnects on its own as soon as the daemon answers.
+      </p>
+
+      <div class="flex items-center gap-2">
+        <button type="button" onClick={props.onRetry} class="px-3 py-1.5 rounded-md bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-semibold text-xs transition-colors">
+          Retry detection
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowAgent((v) => !v)}
+          class="text-[10px] uppercase tracking-wider px-2 py-1.5 rounded border border-gray-700 hover:border-emerald-500/50 text-gray-400 hover:text-emerald-200 transition-colors"
+        >
+          {showAgent() ? 'hide prompt' : 'Hand it to Claude Code'}
+        </button>
+      </div>
+      <Show when={showAgent()}>
+        <div class="mt-3">
+          <CommandBlock multiline label="Paste this into Claude Code / Cursor / Cline">
+            {agentPromptForHome(home())}
+          </CommandBlock>
+        </div>
+      </Show>
     </div>
   );
 }

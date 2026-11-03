@@ -169,9 +169,7 @@ export default function ProjectsRail() {
           fallback={
             <Show when={mode() === 'full'}>
               <div class="projects-rail-empty">
-                No daemons on :{PORT_LO}–{PORT_HI}. Start{' '}
-                <code class="font-mono" style={{ color: 'var(--text-strong)' }}>meshcore start</code>{' '}
-                in any <code class="font-mono">.meshkore/</code> repo.
+                Can&rsquo;t reach the daemon on :{PORT_LO}–{PORT_HI}. The steps to check it are on the right.
               </div>
             </Show>
           }

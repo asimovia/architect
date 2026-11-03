@@ -111,27 +111,72 @@ export function defaultStopCommand(path: string): string {
   return `pkill -f "${path}/.meshkore/scripts/daemon.py"`;
 }
 
-/** One-liner that makes the daemon resident (launchd) — offered when the
- *  remembered home says it is not. `make install` is the server home's
- *  Makefile target; a home without one falls back to a plain start. */
+/** Where the optional control script is published (standard v39 §10.2). */
+export const MESHCTL_URL = 'https://architect.meshkore.com/reference/cluster/scripts/meshctl.sh';
+const TLS_URL = 'https://architect.meshkore.com/reference/cluster/scripts/tls';
+
+/** True when the remembered start command goes through `meshctl.sh` — the
+ *  only start form that survives closing the terminal that ran it. */
+export function usesMeshctl(home: DaemonHome | null): boolean {
+  return !!home && /meshctl\.sh"? start$/.test(home.start);
+}
+
+/** One-liner that makes the daemon resident (launchd / systemd) — offered
+ *  when the remembered home says it is not. Only meshctl and the old
+ *  Makefile know how; a plain start stays a plain start. */
 export function installCommand(home: DaemonHome): string {
   if (/meshctl\.sh" start$/.test(home.start)) return home.start.replace(/ start$/, ' install');
   return home.start.includes('make ') ? home.start.replace(/make \w+$/, 'make install') : home.start;
 }
 
-/** The prompt to paste into a coding CLI when the operator would rather
- *  hand it over. */
-export function agentPromptForHome(home: DaemonHome | null): string {
-  const where = home ? `It is installed at ${home.path}.` : 'Find the folder that contains .meshkore/scripts/daemon.py (the MeshKore server home).';
-  const how = home ? `Run: ${home.start}` : 'From that folder run: python3 .meshkore/scripts/daemon.py';
+/** Step 1 — is a daemon answering at all? `-k` on purpose: this asks
+ *  "is it running", not "is the certificate good". */
+export function runningCheckCommand(port = 5573): string {
+  return `curl -sk https://localhost:${port}/health`;
+}
+
+/** Step 2 — the request the browser makes: same daemon, real certificate
+ *  check. Fails while step 1 succeeds = expired or mismatched certificate. */
+export function certCheckCommand(port = 5573): string {
+  return `curl -s https://daemon.meshkore.com:${port}/health`;
+}
+
+/** Fetch a current loopback TLS bundle into the folder the daemon reads it
+ *  from (`<home>/.meshkore/scripts/tls/`). Restart the daemon afterwards. */
+export function tlsRefreshCommand(home: DaemonHome | null): string {
+  const dir = home ? `"${home.path}/.meshkore/scripts/tls"` : '"<meshkore-server folder>/.meshkore/scripts/tls"';
   return [
-    'The MeshKore daemon on this machine is not running. It is ONE process that serves every project here.',
+    `cd ${dir}`,
+    `curl -fsSL ${TLS_URL}/fullchain.pem -o fullchain.pem`,
+    `curl -fsSL ${TLS_URL}/privkey.pem -o privkey.pem && chmod 600 privkey.pem`,
+  ].join('\n');
+}
+
+/** Download the control script into the server home. */
+export function meshctlDownloadCommand(home: DaemonHome | null): string {
+  const dest = home ? `"${home.path}/meshctl.sh"` : '"<meshkore-server folder>/meshctl.sh"';
+  return `curl -fsSL ${MESHCTL_URL} -o ${dest} && chmod +x ${dest}`;
+}
+
+/** The prompt to paste into a coding CLI when the operator would rather
+ *  hand it over. It must not claim the daemon is stopped: from the browser
+ *  a running daemon with an expired certificate looks exactly the same. */
+export function agentPromptForHome(home: DaemonHome | null): string {
+  const where = home
+    ? `It is installed at ${home.path} (daemon at .meshkore/scripts/daemon.py, TLS bundle at .meshkore/scripts/tls/).`
+    : 'Find the folder that contains .meshkore/scripts/daemon.py (the MeshKore server home, usually ~/meshkore-server).';
+  const start = home ? home.start : 'cd <that folder> && python3 .meshkore/scripts/daemon.py';
+  return [
+    'The MeshKore Architect in my browser cannot reach the MeshKore daemon on this machine. It is ONE process that serves every project here. It may be stopped, or running with an expired TLS certificate.',
     where,
-    how,
-    home && !home.resident
-      ? `Then make it resident so a reboot does not kill it: ${installCommand(home)}`
-      : '',
-    'Confirm with: curl -sk https://localhost:5573/health',
+    `1. Is it running? ${runningCheckCommand()} — JSON with "ok": true means yes. Nothing answers on 5570–5589 → start it: ${start}`,
+    `2. Is the certificate valid? ${certCheckCommand()} (no -k). A certificate error, or "tls": false in step 1, means the bundle is expired or missing: refresh .meshkore/scripts/tls/ from ${TLS_URL}/{fullchain.pem,privkey.pem}, then restart the daemon.`,
+    home && usesMeshctl(home)
+      ? home.resident
+        ? ''
+        : `3. Then make it resident so a reboot does not stop it: ${installCommand(home)}`
+      : `3. To keep it running across terminals and reboots, download the control script (${MESHCTL_URL}) into the server home and run "meshctl.sh install" — or follow https://meshkore.com/reference/agents/daemon.md.`,
+    `Done when ${certCheckCommand()} answers without -k.`,
   ]
     .filter(Boolean)
     .join('\n');
