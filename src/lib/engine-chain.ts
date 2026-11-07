@@ -229,3 +229,20 @@ export function effortShort(options: readonly Opt[], id: string | null | undefin
   if (i < 0) return 'auto';
   return `${i + 1}/${levels.length}`;
 }
+
+/** The model's display name as the header's combo shows it — the catalog
+ *  label for (client, provider), minus a trailing "(latest)". Falls back to
+ *  the raw id, then "Auto" for the CLI default. */
+export function modelLabelFor(
+  client: string | null | undefined,
+  provider: string | null | undefined,
+  catalog: ClientCatalog,
+  model: string | null | undefined,
+): string {
+  const id = model ?? '';
+  const hit = modelOptionsFor(client, provider, catalog)
+    .flatMap((g) => g.items)
+    .find((o) => o.id === id);
+  const label = (hit?.label ?? id).replace(/\s*\(latest\)\s*$/i, '').trim();
+  return label || 'Auto';
+}

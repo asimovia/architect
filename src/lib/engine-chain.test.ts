@@ -11,6 +11,7 @@ import {
   defaultEffortFor,
   defaultModelFor,
   effortShort,
+  modelLabelFor,
   engineId,
   engineOptions,
   parseEngineId,
@@ -136,4 +137,11 @@ test('effort reads as a position on the client scale', () => {
   assert.equal(effortShort(levels, 'low'), '1/3');
   assert.equal(effortShort(levels, 'default'), 'auto');
   assert.equal(effortShort(levels, 'ultra'), 'auto');
+});
+
+test('the rail names the model the way the header does', () => {
+  const muse = { models: [{ id: 'muse-spark-1.3', label: 'Muse Spark 1.3' }], efforts: [] };
+  assert.equal(modelLabelFor('muse', 'anthropic', muse, 'muse-spark-1.3'), 'Muse Spark 1.3');
+  assert.equal(modelLabelFor('muse', 'anthropic', muse, 'muse-x'), 'muse-x');
+  assert.equal(modelLabelFor('codex', 'anthropic', { models: [], efforts: [] }, ''), 'Auto');
 });

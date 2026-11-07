@@ -26,9 +26,12 @@
 
 import { Show } from 'solid-js';
 import type { ConvMeta, AgentStatusKind } from '~/state/chat';
-import { isFixedAgentConv } from '~/state/chat';
+import { chatStore, isFixedAgentConv } from '~/state/chat';
+import { teamStore } from '~/state/team';
+import { clientsStore } from '~/state/clients';
 import { agentVisualInfo } from '~/lib/agent-types';
-import { modelShort } from '~/lib/models';
+import { resolveDisplayEngine } from '~/lib/member-shadow';
+import { modelLabelFor } from '~/lib/engine-chain';
 
 export interface AgentCardProps {
   conv: string;
@@ -72,6 +75,15 @@ export default function AgentCard(props: AgentCardProps) {
   // so the operator can tell them apart from the project's own agents
   // at a glance.
   const fixed = () => isFixedAgentConv(props.conv);
+  // The model this agent actually runs, named the way the header names it
+  // (same resolver: conv override → member card → snapshot). Which CLI
+  // carries it does not matter here — Spark 1.3 vs Opus 5 does.
+  const engine = () =>
+    resolveDisplayEngine(props.meta, chatStore.state.convs[props.conv], teamStore.get(props.meta.member));
+  const modelLabel = (): string => {
+    const e = engine();
+    return modelLabelFor(e.client, e.provider, clientsStore.catalogFor(e.client), e.model);
+  };
 
   // Rail width — drives the "idle" hint visibility (the metadata row now
   // shows model + L/R always; no per-pill width gating).
@@ -226,11 +238,9 @@ export default function AgentCard(props: AgentCardProps) {
           </Show>
         </span>
 
-        {/* ROW 2 — metadata pills. 2026-06-19 operator rewrite: drop the
-         *  agent-type letter entirely. FIRST column is ALWAYS the model;
-         *  then the L/R (local/remote) badge — and L/R is now the COLOURED
-         *  cue (emerald = local on this machine, sky = remote). The agent
-         *  ID stays internal (navigate by name). */}
+        {/* ROW 2 — the model, named (2026-09-27: client and L/R badges
+         *  removed — the operator wants to see Spark 1.3 vs Opus 5 at a
+         *  glance). The ⇠N queue badge still appears when briefs wait. */}
         {(() => {
           const pillBorder = props.active
             ? 'rgba(170, 180, 200, 0.65)'
@@ -240,26 +250,15 @@ export default function AgentCard(props: AgentCardProps) {
             <span class="flex items-center gap-1 font-mono overflow-hidden flex-nowrap"
               style={{ 'font-size': 'var(--fs-meta, 10px)' }}
             >
-              {/* Model — always the first column. */}
+              {/* The model — the only thing this row says (operator,
+                  2026-09-27): no client, no local/remote badge. */}
               <span
-                class="inline-flex items-center px-1.5 py-px rounded border flex-shrink-0"
+                class="inline-flex items-center px-1.5 py-px rounded border min-w-0 truncate"
                 style={{ 'border-color': pillBorder, color: dimColor }}
-                title={`Model: ${props.meta.model ?? 'auto'}`}
+                title={`Model: ${modelLabel()} · ${engine().client}${engine().provider !== 'anthropic' ? ` · ${engine().provider}` : ''}`}
               >
-                {modelShort(props.meta.model)}
+                <span class="truncate">{modelLabel()}</span>
               </span>
-              {/* DM-CLI-08 (multi-cli-clients) — client badge, shown
-                  ONLY for a non-default client so a claude-code-only
-                  roster (today's universal case) looks unchanged. */}
-              <Show when={props.meta.client && props.meta.client !== 'claude-code'}>
-                <span
-                  class="inline-flex items-center px-1.5 py-px rounded border flex-shrink-0"
-                  style={{ 'border-color': pillBorder, color: dimColor }}
-                  title={`Client: ${props.meta.client}`}
-                >
-                  {props.meta.client?.slice(0, 6)}
-                </span>
-              </Show>
               {/* HD-12 — how many agents are waiting on this member. It
                   goes in the metadata row, not beside the name: names vary
                   wildly in length and this must never squeeze one. Amber,
@@ -281,18 +280,6 @@ export default function AgentCard(props: AgentCardProps) {
                   ⇠{props.waiting!.length}
                 </span>
               </Show>
-              {/* Local / Remote — the coloured cue. */}
-              <span
-                class="inline-flex items-center justify-center px-1.5 py-px rounded border flex-shrink-0"
-                style={{
-                  color: isRemote() ? 'var(--theme-byline-user, #7dd3fc)' : 'var(--theme-accent-bright, #34d399)',
-                  'border-color': pillBorder,
-                  'min-width': '16px',
-                }}
-                title={isRemote() ? 'remote — runs off this machine' : 'local — runs on this machine'}
-              >
-                {isRemote() ? 'R' : 'L'}
-              </span>
             </span>
           );
         })()}
